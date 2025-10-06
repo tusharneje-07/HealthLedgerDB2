@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Update Records</title>
+        {% load static %}
+        <link href="{% static 'output.css' %}" rel="stylesheet">
+    </head>
+    <body class="bg-zinc-900 min-h-screen text-zinc-100">
+
+        <!-- Navbar -->
+        <nav class="bg-zinc-800 border-b border-zinc-700 sticky top-0 z-50">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <!-- Logo -->
+                    <div class="flex items-center">
+                        <div class="text-xl font-semibold text-zinc-100">
+                            HealthLedger
+                        </div>
+                    </div>
+
+                    <!-- Navigation Links -->
+                    <div class="hidden md:flex space-x-6">
+                        <a href="#"
+                            class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">Home</a>
+                        <a href="#"
+                            class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">Records</a>
+                        <a href="#"
+                            class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">Settings</a>
+                    </div>
+
+                    <!-- Mobile Menu Button -->
+                    <button class="md:hidden text-zinc-400 hover:text-zinc-100">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content Container -->
+        <div class="max-w-8xl mx-auto px-12 py-3 sm:px-8 lg:px-8">
+
+            <!-- Update Form Card -->
+            <div class="bg-zinc-800 rounded-lg shadow-2xl overflow-hidden mb-8">
+
+                <!-- Header -->
+                <div class="px-8 py-6 border-b border-zinc-700">
+                    <h1 class="text-2xl font-semibold text-zinc-100">Update
+                        record</h1>
+                </div>
+
+                <!-- Form Body -->
+                <div class="p-8">
+                    <form id="updateForm" class="space-y-6">
+
+                        <!-- Grid Layout for Form Fields -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                            <!-- UID Field -->
+                            <div>
+                                <label for="updateUid"
+                                    class="block text-sm font-medium text-zinc-400 mb-2">
+                                    UID
+                                </label>
+                                <input
+                                    type="text"
+                                    id="updateUid"
+                                    name="updateUid"
+                                    required
+                                    class="w-full bg-zinc-700 border-0 rounded-lg px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-zinc-800 transition-all duration-200"
+                                    placeholder="Enter UID to update">
+                            </div>
+
+                            <!-- AMOUNT Field -->
+                            <div>
+                                <label for="updateAmount"
+                                    class="block text-sm font-medium text-zinc-400 mb-2">
+                                    Amount Paying
+                                </label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    id="updateAmount"
+                                    name="updateAmount"
+                                    required
+                                    class="w-full bg-zinc-700 border-0 rounded-lg px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-zinc-800 transition-all duration-200"
+                                    placeholder="0.00">
+                            </div>
+                            <!-- INVOICE_NUM Field -->
+                            <div>
+                                <label for="updateInvoiceNum"
+                                    class="block text-sm font-medium text-zinc-400 mb-2">
+                                    Invoice Number
+                                </label>
+                                <input
+                                    type="text"
+                                    id="updateInvoiceNum"
+                                    name="updateInvoiceNum"
+                                    required
+                                    class="w-full bg-zinc-700 border-0 rounded-lg px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-zinc-800 transition-all duration-200"
+                                    placeholder="0.00"
+                                    readonly>
+                            </div>
+                        </div>
+
+                        <!-- Success/Error Message Area -->
+                        <div id="updateMessageContainer" class="hidden">
+                            <div id="updateSuccessMessage"
+                                class="hidden bg-green-900/30 border border-green-700 text-green-400 px-4 py-3 rounded-lg">
+                                Record updated successfully!
+                            </div>
+                            <div id="updateErrorMessage"
+                                class="hidden bg-red-900/30 border border-red-700 text-red-400 px-4 py-3 rounded-lg">
+                                Error updating record. Please try again.
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="flex flex-col-reverse sm:flex-row gap-3">
+                            {% comment %} <button
+                                type="button"
+                                onclick="document.getElementById('updateForm').reset()"
+                                class="flex-1 px-6 py-3 bg-zinc-700 hover:bg-zinc-600 text-zinc-400 hover:text-zinc-100 font-medium rounded-lg transition-all duration-200 border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-600 focus:ring-offset-zinc-800">
+                                Clear
+                            </button> {% endcomment %}
+                            <button
+                                type="submit"
+                                class="flex-1 px-6 py-3 bg-zinc-200 hover:bg-zinc-100 text-zinc-900 font-medium rounded-lg transition-all duration-200 border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-200 focus:ring-offset-zinc-800">
+                                Update Record
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Data Table Card -->
+            <div class="bg-zinc-800 rounded-lg shadow-2xl overflow-hidden">
+
+                <!-- Table Header -->
+                <div
+                    class="px-8 py-6 border-b border-zinc-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <h2 class="text-2xl font-semibold text-zinc-100">Records
+                        Database</h2>
+                    <button
+                        onclick="window.location.reload();"
+                        class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-lg transition-all duration-200 text-sm font-medium border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-600 focus:ring-offset-zinc-800">
+                        Refresh
+                    </button>
+                </div>
+
+                <!-- Table Container with Horizontal Scroll -->
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-zinc-900/50 border-b border-zinc-700">
+                            <tr>
+                                <th
+                                    class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
+                                    REC Number
+                                </th>
+                                <th
+                                    class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
+                                    UID
+                                </th>
+                                <th
+                                    class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
+                                    Username
+                                </th>
+                                <th
+                                    class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
+                                    Invoice Number
+                                </th>
+                                <th
+                                    class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
+                                    Date
+                                </th>
+                                <th
+                                    class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
+                                    Amount
+                                </th>
+                                <th
+                                    class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
+                                    Paid Amount
+                                </th>
+                                <th
+                                    class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
+                                    Remark
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody" class="divide-y divide-zinc-700">
+                            <!-- Table rows will be dynamically inserted here -->
+                            <tr class="text-center">
+                                <td colspan="8"
+                                    class="px-6 py-12 text-zinc-400">
+                                    <div
+                                        class="flex flex-col items-center space-y-3">
+                                        <svg class="w-12 h-12 text-zinc-600"
+                                            fill="none" stroke="currentColor"
+                                            viewBox="0 0 24 24">
+                                            <path stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                        </svg>
+                                        <p class="text-lg">Loading
+                                            records...</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Table Footer with Loading Indicator -->
+                <div id="loadingIndicator"
+                    class="hidden px-8 py-4 border-t border-zinc-700">
+                    <div
+                        class="flex items-center justify-center space-x-2 text-zinc-400">
+                        <svg class="animate-spin h-5 w-5" fill="none"
+                            viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10"
+                                stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor"
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Loading data...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- JavaScript for Update Form and Table Loading -->
+        <script>
+        // Record Fetcher
+        document.getElementById('updateUid').addEventListener('input', function() {
+            console.log('Fetching record for UID:', this.value);
+            if(this.value.trim() === ''){
+                document.getElementById('updateInvoiceNum').value = '';
+                getdata(0);
+                return;
+            }
+            fetch(`http://127.0.0.1:8000/api/get_data_by_uid?uid=${this.value}`, {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json"
+                }
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                // `data` is an array of objects
+                console.log("Fetched data:", data);
+                if (data.length > 0) {
+                    const record = data[0];
+                    document.getElementById('updateInvoiceNum').value = record.invoiceNum || '';
+                } else {
+                    document.getElementById('updateInvoiceNum').value = '';
+                }
+                loadTableData(data);
+
+                // Example: accessing first record
+                if (data.length > 0) {
+                    const record = data[0];
+                    console.log("Record Number:", record.recNumber);
+                    console.log("Username:", record.username);
+                    console.log("Invoice Number:", record.invoiceNum);
+                    console.log("Amount Paid:", record.paidAmount);
+                }
+            })
+            .catch(error => {
+                console.error("Error fetching data:", error);
+            });
+
+            loadTableData([
+                {
+                    recNumber: 0000,
+                    uid: this.value,
+                    username: '--- ---',
+                    invoiceNum: '--- --- ---',
+                    date: '--- --- ---',
+                    amount: 00000,
+                    paidAmount: 00000,
+                    remark: 'Loading...'
+                }])
+        });
+
+        // Update form submission handler
+        document.getElementById('updateForm').addEventListener('submit', function(e) {
+            e.preventDefault(); // Prevent default form submission
+
+            // Get form data
+            const updateData = {
+                uid: document.getElementById('updateUid').value,
+                invoiceNum: document.getElementById('updateInvoiceNum').value,
+                paid_amount: document.getElementById('updateAmount').value
+            };
+
+            // Show message container
+            const messageContainer = document.getElementById('updateMessageContainer');
+            const successMessage = document.getElementById('updateSuccessMessage');
+            const errorMessage = document.getElementById('updateErrorMessage');
+
+            messageContainer.classList.remove('hidden');
+            successMessage.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+
+            // Make fetch request to Django API
+            fetch(`http://127.0.0.1:8000/api/update_payment/?uid=${encodeURIComponent(updateData.uid)}&invoice_num=${encodeURIComponent(updateData.invoiceNum)}&paid_amount=${encodeURIComponent(updateData.paid_amount)}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.message) {
+                        // Success
+                        successMessage.textContent = data.message;
+                        successMessage.classList.remove('hidden');
+                        errorMessage.classList.add('hidden');
+
+                        // Clear form
+                        document.getElementById('updateUid').value = '';
+                        document.getElementById('updateInvoiceNum').value = '';
+                        document.getElementById('updateAmount').value = '';
+
+                        // Optionally show temporary "loading" row
+                        loadTableData([{
+                            recNumber: '--',
+                            uid: updateData.uid,
+                            username: '---',
+                            invoiceNum: '---',
+                            date: '---',
+                            amount: 0000,
+                            paidAmount: 0000,
+                            remark: 'Loading...'
+                        }]);
+
+                        // Reload table data after 2 seconds
+                        setTimeout(() => {
+                            getdata(0);
+                            messageContainer.classList.add('hidden');
+                        }, 2000);
+                    } else if (data.error) {
+                        // Error
+                        errorMessage.textContent = data.error;
+                        errorMessage.classList.remove('hidden');
+                        successMessage.classList.add('hidden');
+                    }
+                })
+                .catch(err => {
+                    errorMessage.textContent = "Network error. Please try again.";
+                    errorMessage.classList.remove('hidden');
+                    successMessage.classList.add('hidden');
+                    console.error(err);
+                });
+
+            // Log update data (for debugging)
+            console.log('Update submitted:', updateData);
+        });
+
+
+        function loadTableData(sampleData) {
+            const tableBody = document.getElementById('tableBody');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            
+            // Show loading indicator
+            loadingIndicator.classList.remove('hidden');
+            
+
+            // Clear existing table rows
+            tableBody.innerHTML = '';
+
+            // Populate table with data
+            if(!sampleData){
+                return;
+            }
+            sampleData.forEach((record, index) => {
+                const row = document.createElement('tr');
+                // Alternate row colors for better readability
+                row.className = index % 2 === 0 ? 'bg-zinc-900/20 hover:bg-zinc-700/30 transition-colors duration-150' : 'bg-transparent hover:bg-zinc-700/30 transition-colors duration-150';
+                
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-zinc-100">${record.recNumber}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">${record.uid}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">${record.username}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">${record.invoiceNum}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">${record.date}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">₹${record.amount.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">₹${record.paidAmount.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <span class="px-3 py-1 rounded-lg text-xs font-medium ${
+                            record.remark === 'Paid' ? 'bg-green-900/40 text-green-400' :
+                            record.remark === 'Partial' ? 'bg-yellow-900/40 text-yellow-400' :
+                            'bg-red-900/40 text-red-400'
+                        }">
+                            ${record.remark}
+                        </span>
+                    </td>
+                `;
+                
+                tableBody.appendChild(row);
+            });
+
+            // Hide loading indicator
+            loadingIndicator.classList.add('hidden');
+
+        }
+
+
+        window.addEventListener('DOMContentLoaded', function() {
+            getdata(0);
+        });
+
+        function getdata(offset){
+            document.getElementById('loadingIndicator').classList.remove('hidden');
+            
+            setTimeout(() => {
+                document.getElementById('loadingIndicator').classList.add('hidden');
+            }, 2000);
+            fetch(`http://127.0.0.1:8000/api/load_data/?offset=${offset}`, {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/json"
+                    }
+                }).then(response => {
+                    if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                    return response.json();
+                }).then(data => {
+                    console.log("Fetched data:", data);
+                    loadTableData(data);
+                }).catch(error => {
+                    console.error("Error fetching data:", error);
+                });
+        }
+    </script>
+    </body>
+</html>
