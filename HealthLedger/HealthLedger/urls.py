@@ -17,8 +17,10 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 from . import views
+from django.http import HttpResponse
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path("", views.DASH, name="Dashboard"),
     path('new_record/', views.CREATE, name='home'),
     path('update_record/', views.UPDATE, name='update'),
     
@@ -27,4 +29,8 @@ urlpatterns = [
     path('api/get_data_by_uid', views.get_data_by_uid, name='get_data_by_uid'),
     path('api/update_payment/', views.update_payment, name='update_payment'),
     path('api/load_data/', views.load_data, name='load_data'),
+    path('api/recent-activity/', views.recent_activity, name='recent_activity'),
+    
+    
+    path('.well-known/appspecific/com.chrome.devtools.json', lambda r: HttpResponse('{}', content_type='application/json')),
 ]

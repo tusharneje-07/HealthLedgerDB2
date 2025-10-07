@@ -25,9 +25,9 @@
                         <a href="#"
                             class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">Home</a>
                         <a href="#"
-                            class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">Records</a>
+                            class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">Add Patient Info</a>
                         <a href="#"
-                            class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">Settings</a>
+                            class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">Logout</a>
                     </div>
 
                     <!-- Mobile Menu Button -->
@@ -236,10 +236,21 @@
         </div>
 
         <!-- JavaScript for Update Form and Table Loading -->
-        <script>
+    <script>
         // Record Fetcher
         document.getElementById('updateUid').addEventListener('input', function() {
-            console.log('Fetching record for UID:', this.value);
+            loadTableData([
+                {
+                    recNumber: '--',
+                    uid: this.value,
+                    username: '---',
+                    invoiceNum: '---',
+                    date: '---',
+                    amount: 0000,
+                    paidAmount: 0000,
+                    remark: 'Loading...'
+                }
+            ])
             if(this.value.trim() === ''){
                 document.getElementById('updateInvoiceNum').value = '';
                 getdata(0);
@@ -256,40 +267,16 @@
                 return response.json();
             })
             .then(data => {
-                // `data` is an array of objects
-                console.log("Fetched data:", data);
                 if (data.length > 0) {
                     const record = data[0];
                     document.getElementById('updateInvoiceNum').value = record.invoiceNum || '';
-                } else {
-                    document.getElementById('updateInvoiceNum').value = '';
+                    loadTableData(data);
                 }
-                loadTableData(data);
-
-                // Example: accessing first record
-                if (data.length > 0) {
-                    const record = data[0];
-                    console.log("Record Number:", record.recNumber);
-                    console.log("Username:", record.username);
-                    console.log("Invoice Number:", record.invoiceNum);
-                    console.log("Amount Paid:", record.paidAmount);
-                }
+                
             })
             .catch(error => {
                 console.error("Error fetching data:", error);
             });
-
-            loadTableData([
-                {
-                    recNumber: 0000,
-                    uid: this.value,
-                    username: '--- ---',
-                    invoiceNum: '--- --- ---',
-                    date: '--- --- ---',
-                    amount: 00000,
-                    paidAmount: 00000,
-                    remark: 'Loading...'
-                }])
         });
 
         // Update form submission handler
@@ -357,9 +344,6 @@
                     successMessage.classList.add('hidden');
                     console.error(err);
                 });
-
-            // Log update data (for debugging)
-            console.log('Update submitted:', updateData);
         });
 
 
@@ -430,7 +414,6 @@
                     if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
                     return response.json();
                 }).then(data => {
-                    console.log("Fetched data:", data);
                     loadTableData(data);
                 }).catch(error => {
                     console.error("Error fetching data:", error);

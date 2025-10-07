@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - RecordApp</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-900 min-h-screen text-zinc-100">
+    
+    <!-- Navbar -->
+    <nav class="bg-zinc-800 border-b border-zinc-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo -->
+                <div class="flex items-center">
+                    <div class="text-xl font-semibold text-zinc-100">
+                        RecordApp
+                    </div>
+                </div>
+                
+                <!-- Navigation Links -->
+                <div class="hidden md:flex space-x-6">
+                    <a href="#" class="text-zinc-100 hover:text-zinc-300 transition-colors duration-200 font-medium">Dashboard</a>
+                    <a href="#" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">Records</a>
+                    <a href="#" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">Analytics</a>
+                    <a href="#" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">Settings</a>
+                </div>
+                
+                <!-- User Menu -->
+                <div class="flex items-center space-x-4">
+                    <button class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                        </svg>
+                    </button>
+                    <div class="flex items-center space-x-2">
+                        <div class="w-8 h-8 bg-zinc-700 rounded-full flex items-center justify-center text-sm font-medium">
+                            JD
+                        </div>
+                        <button class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        
+        <!-- Welcome Section -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-semibold text-zinc-100">Welcome Back!</h1>
+            <p class="text-sm text-zinc-400 mt-1">Here's what's happening with your records today</p>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            
+            <!-- Stat Card 1 -->
+            <div class="bg-zinc-800 rounded-lg p-6 border border-zinc-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-zinc-400">Total Records</p>
+                        <p class="text-3xl font-semibold text-zinc-100 mt-2">1,247</p>
+                        <p class="text-xs text-green-400 mt-2">+12% from last month</p>
+                    </div>
+                    <div class="w-12 h-12 bg-zinc-700 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stat Card 2 -->
+            <div class="bg-zinc-800 rounded-lg p-6 border border-zinc-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-zinc-400">Total Revenue</p>
+                        <p class="text-3xl font-semibold text-zinc-100 mt-2">$48,574</p>
+                        <p class="text-xs text-green-400 mt-2">+8% from last month</p>
+                    </div>
+                    <div class="w-12 h-12 bg-zinc-700 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stat Card 3 -->
+            <div class="bg-zinc-800 rounded-lg p-6 border border-zinc-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-zinc-400">Pending</p>
+                        <p class="text-3xl font-semibold text-zinc-100 mt-2">142</p>
+                        <p class="text-xs text-yellow-400 mt-2">Requires attention</p>
+                    </div>
+                    <div class="w-12 h-12 bg-zinc-700 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stat Card 4 -->
+            <div class="bg-zinc-800 rounded-lg p-6 border border-zinc-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-zinc-400">Completed</p>
+                        <p class="text-3xl font-semibold text-zinc-100 mt-2">1,105</p>
+                        <p class="text-xs text-green-400 mt-2">88.6% completion rate</p>
+                    </div>
+                    <div class="w-12 h-12 bg-zinc-700 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Two Column Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Recent Activity - Takes 2 columns -->
+            <div class="lg:col-span-2 bg-zinc-800 rounded-lg shadow-2xl overflow-hidden border border-zinc-700">
+                <div class="px-6 py-5 border-b border-zinc-700">
+                    <h2 class="text-xl font-semibold text-zinc-100">Recent Activity</h2>
+                </div>
+                <div class="p-6">
+                    <div class="space-y-4">
+                        
+                        <!-- Activity Item 1 -->
+                        <div class="flex items-start space-x-4">
+                            <div class="w-2 h-2 bg-green-400 rounded-full mt-2"></div>
+                            <div class="flex-1">
+                                <p class="text-sm text-zinc-100">New record created</p>
+                                <p class="text-xs text-zinc-400 mt-1">Invoice #INV-2024-156 was added to the system</p>
+                                <p class="text-xs text-zinc-500 mt-1">2 hours ago</p>
+                            </div>
+                        </div>
+
+                        <!-- Activity Item 2 -->
+                        <div class="flex items-start space-x-4">
+                            <div class="w-2 h-2 bg-blue-400 rounded-full mt-2"></div>
+                            <div class="flex-1">
+                                <p class="text-sm text-zinc-100">Payment received</p>
+                                <p class="text-xs text-zinc-400 mt-1">$2,500.00 payment for Invoice #INV-2024-142</p>
+                                <p class="text-xs text-zinc-500 mt-1">4 hours ago</p>
+                            </div>
+                        </div>
+
+                        <!-- Activity Item 3 -->
+                        <div class="flex items-start space-x-4">
+                            <div class="w-2 h-2 bg-yellow-400 rounded-full mt-2"></div>
+                            <div class="flex-1">
+                                <p class="text-sm text-zinc-100">Record updated</p>
+                                <p class="text-xs text-zinc-400 mt-1">Amount updated for UID-456</p>
+                                <p class="text-xs text-zinc-500 mt-1">Yesterday</p>
+                            </div>
+                        </div>
+
+                        <!-- Activity Item 4 -->
+                        <div class="flex items-start space-x-4">
+                            <div class="w-2 h-2 bg-purple-400 rounded-full mt-2"></div>
+                            <div class="flex-1">
+                                <p class="text-sm text-zinc-100">User joined</p>
+                                <p class="text-xs text-zinc-400 mt-1">New user alice_brown registered</p>
+                                <p class="text-xs text-zinc-500 mt-1">2 days ago</p>
+                            </div>
+                        </div>
+
+                        <!-- Activity Item 5 -->
+                        <div class="flex items-start space-x-4">
+                            <div class="w-2 h-2 bg-red-400 rounded-full mt-2"></div>
+                            <div class="flex-1">
+                                <p class="text-sm text-zinc-100">Overdue notice</p>
+                                <p class="text-xs text-zinc-400 mt-1">Invoice #INV-2024-089 is now overdue</p>
+                                <p class="text-xs text-zinc-500 mt-1">3 days ago</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- View All Button -->
+                    <div class="mt-6">
+                        <button class="w-full px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-400 hover:text-zinc-100 rounded-lg transition-all duration-200 text-sm font-medium border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-600 focus:ring-offset-zinc-800">
+                            View all activity
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions - Takes 1 column -->
+            <div class="bg-zinc-800 rounded-lg shadow-2xl overflow-hidden border border-zinc-700">
+                <div class="px-6 py-5 border-b border-zinc-700">
+                    <h2 class="text-xl font-semibold text-zinc-100">Quick Actions</h2>
+                </div>
+                <div class="p-6 space-y-3">
+                    
+                    <button onclick="window.location.href='/new_record'" class="w-full px-4 py-3 bg-zinc-200 hover:bg-zinc-100 text-zinc-900 font-medium rounded-lg transition-all duration-200 border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-200 focus:ring-offset-zinc-800 flex items-center justify-center space-x-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        <span>Create New Record</span>
+                    </button>
+
+                    <button onclick="window.location.href='update_record/'" class="w-full px-4 py-3 bg-zinc-700 hover:bg-zinc-600 text-zinc-400 hover:text-zinc-100 font-medium rounded-lg transition-all duration-200 border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-600 focus:ring-offset-zinc-800 flex items-center justify-center space-x-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        <span>Update Payment Details</span>
+                    </button>
+
+                    <button class="w-full px-4 py-3 bg-zinc-700 hover:bg-zinc-600 text-zinc-400 hover:text-zinc-100 font-medium rounded-lg transition-all duration-200 border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-600 focus:ring-offset-zinc-800 flex items-center justify-center space-x-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
+                        </svg>
+                        <span>Process Payment</span>
+                    </button>
+
+                    <button class="w-full px-4 py-3 bg-zinc-700 hover:bg-zinc-600 text-zinc-400 hover:text-zinc-100 font-medium rounded-lg transition-all duration-200 border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-600 focus:ring-offset-zinc-800 flex items-center justify-center space-x-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        <span>Generate Report</span>
+                    </button>
+
+                    <!-- Divider -->
+                    <div class="border-t border-zinc-700 my-4"></div>
+
+                    <!-- Status Summary -->
+                    <div class="space-y-3">
+                        <h3 class="text-sm font-medium text-zinc-400">Status Overview</h3>
+                        
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-zinc-400">Partial</span>
+                            <span class="text-sm font-medium text-yellow-400">249</span>
+                        </div>
+                        
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-zinc-400">Pending</span>
+                            <span class="text-sm font-medium text-red-400">142</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Records Table -->
+        <div class="mt-6 bg-zinc-800 rounded-lg shadow-2xl overflow-hidden border border-zinc-700">
+            <div class="px-6 py-5 border-b border-zinc-700 flex justify-between items-center">
+                <h2 class="text-xl font-semibold text-zinc-100">Recent Records</h2>
+                <a href="#" class="text-sm text-blue-400 hover:text-blue-300 transition-colors duration-200">
+                    View all
+                </a>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-zinc-900/50 border-b border-zinc-700">
+                        <tr>
+                            <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Invoice</th>
+                            <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Customer</th>
+                            <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Date</th>
+                            <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Amount</th>
+                            <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Status</th>
+                            <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-700">
+                        <tr class="hover:bg-zinc-700/30 transition-colors duration-150">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-zinc-100">INV-2024-156</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">john_doe</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">2024-10-07</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">$1,500.00</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                <span class="px-3 py-1 rounded-lg text-xs font-medium bg-green-900/40 text-green-400">Paid</span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                <button class="text-blue-400 hover:text-blue-300 transition-colors duration-200">View</button>
+                            </td>
+                        </tr>
+                        <tr class="hover:bg-zinc-700/30 transition-colors duration-150">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-zinc-100">INV-2024-155</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">jane_smith</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">2024-10-06</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">$2,300.50</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                <span class="px-3 py-1 rounded-lg text-xs font-medium bg-yellow-900/40 text-yellow-400">Partial</span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                <button class="text-blue-400 hover:text-blue-300 transition-colors duration-200">View</button>
+                            </td>
+                        </tr>
+                        <tr class="hover:bg-zinc-700/30 transition-colors duration-150">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-zinc-100">INV-2024-154</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">bob_wilson</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">2024-10-05</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">$850.75</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                <span class="px-3 py-1 rounded-lg text-xs font-medium bg-red-900/40 text-red-400">Pending</span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                <button class="text-blue-400 hover:text-blue-300 transition-colors duration-200">View</button>
+                            </td>
+                        </tr>
+                        <tr class="hover:bg-zinc-700/30 transition-colors duration-150">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-zinc-100">INV-2024-153</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">alice_brown</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">2024-10-04</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">$3,200.00</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                <span class="px-3 py-1 rounded-lg text-xs font-medium bg-green-900/40 text-green-400">Paid</span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                <button class="text-blue-400 hover:text-blue-300 transition-colors duration-200">View</button>
+                            </td>
+                        </tr>
+                        <tr class="hover:bg-zinc-700/30 transition-colors duration-150">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-zinc-100">INV-2024-152</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">charlie_davis</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">2024-10-03</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">$1,750.25</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                <span class="px-3 py-1 rounded-lg text-xs font-medium bg-green-900/40 text-green-400">Paid</span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                <button class="text-blue-400 hover:text-blue-300 transition-colors duration-200">View</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript for Dashboard -->
+    <script>
+        // Simulate real-time data updates
+        function updateDashboard() {
+            console.log('Dashboard data refreshed');
+        }
+
+        // Refresh dashboard every 30 seconds
+        setInterval(updateDashboard, 30000);
+
+        // Initial load
+        window.addEventListener('DOMContentLoaded', function() {
+            console.log('Dashboard loaded');
+        });
+    </script>
+    <script>
+        const activityContainer = document.querySelector('.space-y-4');
+
+        // Fetch recent activities
+        async function fetchActivities() {
+            try {
+                const response = await fetch('/api/recent-activity/'); // Django API endpoint
+                const data = await response.json();
+
+                // Clear existing activities
+                activityContainer.innerHTML = '';
+
+                // Loop through activities and create HTML
+                data.activities.forEach((activity, index) => {
+                    const colorClasses = ['bg-green-400','bg-blue-400','bg-yellow-400','bg-purple-400','bg-red-400'];
+                    const activityHTML = `
+                        <div class="flex items-start space-x-4">
+                            <div class="w-2 h-2 ${colorClasses[index % colorClasses.length]} rounded-full mt-2"></div>
+                            <div class="flex-1">
+                                <p class="text-sm text-zinc-100">${activity.log_name}</p>
+                                <p class="text-xs text-zinc-400 mt-1">${activity.log_desc}</p>
+                                <p class="text-xs text-zinc-500 mt-1">${formatTime(activity.log_date_time)}</p>
+                            </div>
+                        </div>
+                    `;
+                    activityContainer.innerHTML += activityHTML;
+                });
+            } catch (error) {
+                console.error('Error fetching activities:', error);
+            }
+        }
+
+        // Format timestamp to human-readable like "2 hours ago"
+        function formatTime(datetimeStr) {
+            const activityTime = new Date(datetimeStr);
+            const now = new Date();
+            const diff = Math.floor((now - activityTime) / 1000); // seconds
+
+            if(diff < 60) return `${diff} seconds ago`;
+            if(diff < 3600) return `${Math.floor(diff/60)} minutes ago`;
+            if(diff < 86400) return `${Math.floor(diff/3600)} hours ago`;
+            return `${Math.floor(diff/86400)} days ago`;
+        }
+
+        // Call fetch on page load
+        fetchActivities();
+    </script>
+
+</body>
+</html>
