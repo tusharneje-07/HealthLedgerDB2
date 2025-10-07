@@ -1,4 +1,4 @@
-import DB2Query
+import DB2QueryServer
 
-a,b = DB2Query.runQuery("SELECT * FROM register")
+a,b = DB2QueryServer.runQuery("SELECT * FROM register")
 print(a,b)

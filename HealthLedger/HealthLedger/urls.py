@@ -23,6 +23,7 @@ urlpatterns = [
     path("", views.DASH, name="Dashboard"),
     path('new_record/', views.CREATE, name='home'),
     path('update_record/', views.UPDATE, name='update'),
+    path('view_all/', views.VIEW_ALL, name='view_all'),
     
     
     # APIS
@@ -30,6 +31,7 @@ urlpatterns = [
     path('api/update_payment/', views.update_payment, name='update_payment'),
     path('api/load_data/', views.load_data, name='load_data'),
     path('api/recent-activity/', views.recent_activity, name='recent_activity'),
+    path('api/get_stats/', views.getstats, name='get_stats'),
     
     
     path('.well-known/appspecific/com.chrome.devtools.json', lambda r: HttpResponse('{}', content_type='application/json')),

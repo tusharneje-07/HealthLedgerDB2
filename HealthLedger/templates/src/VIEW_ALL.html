@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - HealthLedger</title>
+    {% load static %}
+    <link href="{% static 'output.css' %}" rel="stylesheet">
+</head>
+<body class="bg-zinc-900 min-h-screen text-zinc-100">
+    
+    <!-- Navbar -->
+    <nav class="bg-zinc-800 border-b border-zinc-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo -->
+                <div class="flex items-center">
+                    <div class="text-xl font-semibold text-zinc-100">
+                        HealthLedger
+                    </div>
+                </div>
+                
+                <!-- Navigation Links -->
+                <div class="hidden md:flex space-x-6">
+                    <a class="text-zinc-400 hover:text-zinc-300 transition-colors duration-200" onclick="window.location.href='/'" style="cursor: pointer;">Dashboard</a>
+                    <a href="#" class="text-zinc-100 hover:text-zinc-100 transition-colors duration-200 font-medium">Records</a>
+                    <a href="#" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">Analytics</a>
+                    <a href="#" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">Settings</a>
+                </div>
+                
+                <!-- User Menu -->
+                <div class="flex items-center space-x-4">
+                    <button class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                        </svg>
+                    </button>
+                    <div class="flex items-center space-x-2">
+                        <div class="w-8 h-8 bg-zinc-700 rounded-full flex items-center justify-center text-sm font-medium">
+                            JD
+                        </div>
+                        <button class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        <!-- Recent Records Table -->
+        <div class="mt-6 bg-zinc-800 rounded-lg shadow-2xl overflow-hidden border border-zinc-700">
+            
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-zinc-900/50 border-b border-zinc-700">
+                        <tr>
+                            <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Invoice</th>
+                            <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Customer</th>
+                            <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Date</th>
+                            <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Amount</th>
+                            <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Status</th>
+                            <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-700">
+                        {% for record in records %}
+                        <tr class="hover:bg-zinc-700/30 transition-colors duration-150">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-zinc-100">{{ record.recNumber }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">{{ record.username }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">{{ record.date }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">₹{{ record.amount }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">₹{{ record.paidAmount }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                {% if record.remark == "Paid" %}
+                                    <span class="px-3 py-1 rounded-lg text-xs font-medium bg-green-900/40 text-green-400">{{ record.remark }}</span>
+                                {% else %}
+                                    <span class="px-3 py-1 rounded-lg text-xs font-medium bg-red-900/40 text-red-400">Pending</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript for Dashboard -->
+    <script>
+        // Simulate real-time data updates
+        function updateDashboard() {
+            console.log('Dashboard data refreshed');
+        }
+
+        // Refresh dashboard every 30 seconds
+        setInterval(updateDashboard, 30000);
+
+        // Initial load
+        window.addEventListener('DOMContentLoaded', function() {
+            console.log('Dashboard loaded');
+        });
+    </script>
+    <script>
+        const activityContainer = document.querySelector('.space-y-4');
+
+        // Fetch recent activities
+        async function fetchActivities() {
+            try {
+                const response = await fetch('/api/recent-activity/'); // Django API endpoint
+                const data = await response.json();
+
+                // Clear existing activities
+                activityContainer.innerHTML = '';
+
+                // Loop through activities and create HTML
+                data.activities.forEach((activity, index) => {
+                    const colorClasses = ['bg-green-400','bg-blue-400','bg-yellow-400','bg-purple-400','bg-red-400'];
+                    const activityHTML = `
+                        <div class="flex items-start space-x-4">
+                            <div class="w-2 h-2 ${colorClasses[index % colorClasses.length]} rounded-full mt-2"></div>
+                            <div class="flex-1">
+                                <p class="text-sm text-zinc-100">${activity.log_name}</p>
+                                <p class="text-xs text-zinc-400 mt-1">${activity.log_desc}</p>
+                                <p class="text-xs text-zinc-500 mt-1">${formatTime(activity.log_date_time)}</p>
+                            </div>
+                        </div>
+                    `;
+                    activityContainer.innerHTML += activityHTML;
+                });
+            } catch (error) {
+                console.error('Error fetching activities:', error);
+            }
+        }
+
+        // Format timestamp to human-readable like "2 hours ago"
+        function formatTime(datetimeStr) {
+            const activityTime = new Date(datetimeStr);
+            const now = new Date();
+            const diff = Math.floor((now - activityTime) / 1000); // seconds
+
+            if(diff < 60) return `${diff} seconds ago`;
+            if(diff < 3600) return `${Math.floor(diff/60)} minutes ago`;
+            if(diff < 86400) return `${Math.floor(diff/3600)} hours ago`;
+            return `${Math.floor(diff/86400)} days ago`;
+        }
+
+
+        async function fetchActivities() {
+            try {
+                const response = await fetch('/api/get_stats/'); // Django API endpoint
+                const data = await response.json();
+                console.log(data); // Log the fetched data for debugging
+                document.getElementById('total_records').textContent = data.total_records;
+                document.getElementById('total_revenue').textContent = `₹${data.total_revenue.toFixed(2)}`;
+                document.getElementById('total_pending_amount').textContent = `₹${data.total_pending_amount.toFixed(2)}`;
+                document.getElementById('total_paid_customers').textContent = data.total_paid_customers;
+
+                document.getElementById('completed').textContent = data.total_paid_customers;
+                document.getElementById('pending').textContent = parseInt(data.total_records) - parseInt(data.total_paid_customers);
+            } catch (error) {
+                console.error('Error fetching activities:', error);
+            }
+        }
+
+        fetchActivities();
+
+    </script>
+
+</body>
+</html>

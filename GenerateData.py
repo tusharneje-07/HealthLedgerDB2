@@ -1,6 +1,6 @@
 import random
 import datetime
-import DB2Query
+import DB2QueryServer
 
 # Function to generate random name
 def random_username():
@@ -28,7 +28,7 @@ for i in range(1, 501):
         INSERT INTO patient_data (uid, username, innvoce_num, date, amount)
         VALUES ('{uid}', '{username}', '{innvoce_num}', '{date}', {amount});
     """
-    a, b = DB2Query.runQuery(patient_data_sql)
+    a, b = DB2QueryServer.runQuery(patient_data_sql)
     if not a:
         print("ERROR inserting into patient_data:", b)
         break
@@ -37,7 +37,7 @@ for i in range(1, 501):
         INSERT INTO register (uid, innvoce_num, paid_amt)
         VALUES ('{uid}', '{innvoce_num}', 0);
     """
-    a, b = DB2Query.runQuery(register_sql)
+    a, b = DB2QueryServer.runQuery(register_sql)
     if not a:
         print("ERROR inserting into register:", b)
         break
