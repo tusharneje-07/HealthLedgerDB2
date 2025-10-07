@@ -32,6 +32,7 @@ urlpatterns = [
     path('api/load_data/', views.load_data, name='load_data'),
     path('api/recent-activity/', views.recent_activity, name='recent_activity'),
     path('api/get_stats/', views.getstats, name='get_stats'),
+    path('api/add_new_data/', views.ADD_NEW_DATA, name='add_new_data'),
     
     
     path('.well-known/appspecific/com.chrome.devtools.json', lambda r: HttpResponse('{}', content_type='application/json')),

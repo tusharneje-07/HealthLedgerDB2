@@ -163,6 +163,7 @@ def getstats(request):
     total_paid_customers = 0
 
     for row in result:
+        print(row['AMOUNT'], row['PAID_AMT'], type(row['AMOUNT']), type(row['PAID_AMT']))
         amount = float(row['AMOUNT'])
         paid_amount = float(row['PAID_AMT'])
         total_revenue += amount
@@ -194,7 +195,6 @@ def VIEW_ALL(request):
         FROM patient_data p
         LEFT JOIN register r
         ON p.UID = r.UID AND p.INNVOCE_NUM = r.INNVOCE_NUM
-        FETCH FIRST 100 ROWS ONLY
     """
 
     success, result = DB2Query.runSelectQuery(query)
@@ -220,3 +220,43 @@ def VIEW_ALL(request):
             "remark": remark,
         })
     return render(request, 'src/VIEW_ALL.html', {"records": formatted_result})
+
+
+def ADD_NEW_DATA(request):
+    print(request.GET)
+    if request.method == "GET":
+        uid = request.GET.get("uid")
+        username = request.GET.get("username")
+        innvoce_num = request.GET.get("invoiceNum")
+        date = request.GET.get("date")
+        amount = request.GET.get("amount")
+
+        if not uid or not username or not innvoce_num or not date or not amount:
+            return JsonResponse({"error": "All fields are required"}, status=400)
+
+        try:
+            amount = float(amount)
+        except ValueError:
+            return JsonResponse({"error": "Amount must be a number"}, status=400)
+
+        # Insert into patient_data
+        patient_data_sql = f"""
+            INSERT INTO patient_data (uid, username, innvoce_num, date, amount)
+            VALUES ('{uid}', '{username}', '{innvoce_num}', '{date}', {amount})
+        """
+        a, b = DB2Query.runQuery(patient_data_sql)
+        if not a:
+            return JsonResponse({"error": f"Failed to insert into patient_data: {b}"}, status=500)
+
+        # Insert into register with initial paid_amt as 0
+        register_sql = f"""
+            INSERT INTO register (uid, innvoce_num, paid_amt)
+            VALUES ('{uid}', '{innvoce_num}', 0)
+        """
+        a, b = DB2Query.runQuery(register_sql)
+        if not a:
+            return JsonResponse({"error": f"Failed to insert into register: {b}"}, status=500)
+
+        return JsonResponse({"message": "Record added successfully"})
+    else:
+        return JsonResponse({"error": "Invalid request method"}, status=405)

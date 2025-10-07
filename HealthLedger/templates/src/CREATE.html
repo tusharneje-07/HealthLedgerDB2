@@ -65,15 +65,6 @@
             <!-- Form Body -->
             <div class="p-8">
                 <form id="recordForm" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    
-                    <!-- REC_NUMBER Field -->
-                    <!-- <div class="flex flex-col w-full">
-                        <label for="recNumber" class="text-sm font-medium text-zinc-400 mb-2">Record Number</label>
-                        <input type="number" id="recNumber" name="recNumber" required
-                            class="w-full bg-zinc-700 border-0 rounded-lg px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-zinc-800 transition-all duration-200"
-                            placeholder="Enter record number">
-                    </div> -->
-
                     <!-- UID Field -->
                     <div class="flex flex-col w-full">
                         <label for="uid" class="text-sm font-medium text-zinc-400 mb-2">UID</label>
@@ -156,20 +147,34 @@
             const errorMessage = document.getElementById('errorMessage');
             messageContainer.classList.remove('hidden');
 
-            const isSuccess = true; 
-            if (isSuccess) {
-                successMessage.classList.remove('hidden');
-                errorMessage.classList.add('hidden');
-                setTimeout(() => {
-                    this.reset();
-                    messageContainer.classList.add('hidden');
+            // API call using fetch GET
+            const params = new URLSearchParams(formData).toString();
+            fetch(`/api/add_new_data/?${params}`, {
+                method: 'GET'
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log(data);
+                if (data.status) {
+                    // On success, show success message
+                    successMessage.classList.remove('hidden');
+                    errorMessage.classList.add('hidden');
+                    setTimeout(() => {
+                        this.reset();
+                        messageContainer.classList.add('hidden');
+                        successMessage.classList.add('hidden');
+                    }, 3000);
+                } else {
+                    // On failure, show error message
+                    errorMessage.classList.remove('hidden');
                     successMessage.classList.add('hidden');
-                }, 3000);
-            } else {
+                }
+            })
+            .catch(error => {
+                // On error, show error message
                 errorMessage.classList.remove('hidden');
                 successMessage.classList.add('hidden');
-            }
-            console.log('Form submitted:', formData);
+            });
         });
     </script>
 </body>
