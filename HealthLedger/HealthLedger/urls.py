@@ -24,6 +24,7 @@ urlpatterns = [
     path('new_record/', views.CREATE, name='home'),
     path('update_record/', views.UPDATE, name='update'),
     path('view_all/', views.VIEW_ALL, name='view_all'),
+    path('logout/', views.LOGOUT, name='logout'),
     
     
     # APIS

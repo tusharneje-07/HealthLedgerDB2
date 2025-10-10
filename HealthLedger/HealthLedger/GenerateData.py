@@ -1,6 +1,6 @@
 import random
 import datetime
-import DB2Query
+import HealthLedger.HealthLedger.DB2.DB2Query as DB2Query
 
 # Lists of 50 Indian first and last names
 first_names = [

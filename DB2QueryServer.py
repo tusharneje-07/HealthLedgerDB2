@@ -11,6 +11,7 @@ dsn_pwd = "2425455"
 dsn_database = "HOSPITAL"
 dsn_port = "25000"
 dsn_protocol = "TCPIP"
+schema = "NEJET"
 
 dsn = (
     f"DATABASE={dsn_database};"
@@ -26,7 +27,7 @@ def runQuery(query):
     try:
         conn = ibm_db.connect(dsn, "", "")
         ibm_db.autocommit(conn, ibm_db.SQL_AUTOCOMMIT_ON)
-        ibm_db.exec_immediate(conn, "SET CURRENT SCHEMA = NEJET")
+        ibm_db.exec_immediate(conn, "SET CURRENT SCHEMA = {}".format(schema))
         ibm_db.exec_immediate(conn, query)
         ibm_db.close(conn)
         return True, "Query executed successfully"

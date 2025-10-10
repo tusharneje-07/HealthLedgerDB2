@@ -1,7 +1,6 @@
 from django.shortcuts import render
 from django.http import JsonResponse
-from . import DB2Query
-import ibm_db
+from .DB2 import DB2Query
 from datetime import datetime
 
 def CREATE(request):
@@ -163,7 +162,6 @@ def getstats(request):
     total_paid_customers = 0
 
     for row in result:
-        print(row['AMOUNT'], row['PAID_AMT'], type(row['AMOUNT']), type(row['PAID_AMT']))
         amount = float(row['AMOUNT'])
         paid_amount = float(row['PAID_AMT'])
         total_revenue += amount
@@ -245,6 +243,7 @@ def ADD_NEW_DATA(request):
             VALUES ('{uid}', '{username}', '{innvoce_num}', '{date}', {amount})
         """
         a, b = DB2Query.runQuery(patient_data_sql)
+         # Check if insertion was successful
         if not a:
             return JsonResponse({"error": f"Failed to insert into patient_data: {b}"}, status=500)
 
@@ -257,6 +256,9 @@ def ADD_NEW_DATA(request):
         if not a:
             return JsonResponse({"error": f"Failed to insert into register: {b}"}, status=500)
 
-        return JsonResponse({"message": "Record added successfully"})
+        return JsonResponse({"status":True,"message": "Record added successfully"})
     else:
         return JsonResponse({"error": "Invalid request method"}, status=405)
+    
+def LOGOUT(request):
+    return render(request, 'src/LOGOUT.html')
