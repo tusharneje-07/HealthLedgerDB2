@@ -5,6 +5,7 @@ import urllib.parse
 app = Flask(__name__)
 
 # -------------------- DB2 CONFIG --------------------
+# Update these variables with your DB2 credentials
 dsn_hostname = "localhost"
 dsn_uid = "db2admin"
 dsn_pwd = "2425455"
@@ -39,7 +40,7 @@ def runSelectQuery(query):
     try:
         conn = ibm_db.connect(dsn, "", "")
         ibm_db.autocommit(conn, ibm_db.SQL_AUTOCOMMIT_ON)
-        ibm_db.exec_immediate(conn, "SET CURRENT SCHEMA = NEJET")
+        ibm_db.exec_immediate(conn, "SET CURRENT SCHEMA = {}".format(schema))
         stmt = ibm_db.exec_immediate(conn, query)
 
         result = []
