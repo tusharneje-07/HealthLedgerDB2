@@ -63,24 +63,139 @@
                         <!-- Grid Layout for Form Fields -->
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-                            <!-- UID Field -->
+                            <!-- UID Field with QR Scan Button -->
                             <div>
                                 <label for="updateUid"
                                     class="block text-sm font-medium text-zinc-400 mb-2">
-                                    UID
+                                    Invoice No.
                                 </label>
-                                <input
-                                    type="text"
-                                    id="updateUid"
-                                    name="updateUid"
-                                    required
-                                    class="w-full bg-zinc-700 border-0 rounded-lg px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-zinc-800 transition-all duration-200"
-                                    placeholder="Enter UID to update">
+                                <div class="flex items-center space-x-3">
+                                    <input
+                                        type="text"
+                                        id="updateUid"
+                                        name="updateUid"
+                                        required
+                                        class="flex-1 w-full bg-zinc-700 border-0 rounded-lg px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-zinc-800 transition-all duration-200"
+                                        placeholder="Enter Invoice Number to update">
+                                    <button
+                                        type="button"
+                                        id="startScanBtn"
+                                        onclick="startScan()"
+                                        class="inline-flex items-center gap-2 px-4 py-3.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-lg transition-all duration-200 border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-600 focus:ring-offset-zinc-800">
+                                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+ <path d="M8 3H7.8C6.11984 3 5.27976 3 4.63803 3.32698C4.07354 3.6146 3.6146 4.07354 3.32698 4.63803C3 5.27976 3 6.11984 3 7.8V8M8 21H7.8C6.11984 21 5.27976 21 4.63803 20.673C4.07354 20.3854 3.6146 19.9265 3.32698 19.362C3 18.7202 3 17.8802 3 16.2V16M21 8V7.8C21 6.11984 21 5.27976 20.673 4.63803C20.3854 4.07354 19.9265 3.6146 19.362 3.32698C18.7202 3 17.8802 3 16.2 3H16M21 16V16.2C21 17.8802 21 18.7202 20.673 19.362C20.3854 19.9265 19.9265 20.3854 19.362 20.673C18.7202 21 17.8802 21 16.2 21H16M3 12H3.01M7.5 12H7.51M16.5 12H16.51M12 12H12.01M21 12H21.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+ </svg>
+                                    </button>
+                                </div>
                             </div>
+
+                            <!-- QR Scanner Modal (hidden by default) -->
+                            <div id="qrScannerModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60">
+                                <div class="bg-zinc-800 rounded-lg p-4 w-full max-w-md mx-4">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <h3 class="text-sm font-medium text-zinc-100">Scan QR Code</h3>
+                                        <button type="button" onclick="stopScan()" class="text-zinc-400 hover:text-zinc-100 focus:outline-none">
+                                            Close
+                                        </button>
+                                    </div>
+                                    <video id="qrVideo" class="w-full rounded bg-black" autoplay playsinline muted></video>
+                                    <p class="mt-2 text-xs text-zinc-400">Point the camera at the QR code. Scanning will auto-fill the Invoice Number.</p>
+                                </div>
+                            </div>
+                            <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+                            <script>
+                            (function() {
+                                let _stream = null;
+                                let _scanning = false;
+                                let _canvas = null;
+                                let _ctx = null;
+
+                                async function startScan() {
+                                    if (_scanning) return;
+
+                                    const modal = document.getElementById("qrScannerModal");
+                                    const video = document.getElementById("qrVideo");
+                                    const uidInput = document.getElementById("updateUid");
+
+                                    if (!modal || !video || !uidInput) {
+                                        console.error("QR scanning elements missing in DOM.");
+                                        return;
+                                    }
+
+                                    // Try to access camera
+                                    try {
+                                        _stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                                        video.srcObject = _stream;
+                                        modal.classList.remove("hidden");
+                                        modal.classList.add("flex");
+                                        await video.play();
+
+                                        _canvas = document.createElement("canvas");
+                                        _ctx = _canvas.getContext("2d");
+                                        _scanning = true;
+                                        scanLoop(video, uidInput);
+                                    } catch (err) {
+                                        console.error("Camera access error:", err);
+                                        alert("Unable to access camera. Please check permissions or use HTTPS/localhost.");
+                                        cleanup();
+                                    }
+                                }
+
+                                function scanLoop(video, uidInput) {
+                                    if (!_scanning) return;
+
+                                    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                                        _canvas.width = video.videoWidth;
+                                        _canvas.height = video.videoHeight;
+                                        _ctx.drawImage(video, 0, 0, _canvas.width, _canvas.height);
+                                        const imageData = _ctx.getImageData(0, 0, _canvas.width, _canvas.height);
+                                        const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+                                        if (code && code.data) {
+                                            uidInput.value = code.data;
+                                            uidInput.dispatchEvent(new Event("input", { bubbles: true }));
+                                            stopScan();
+                                            return;
+                                        }
+                                    }
+
+                                    requestAnimationFrame(() => scanLoop(video, uidInput));
+                                }
+
+                                function stopScan() {
+                                    _scanning = false;
+                                    cleanup();
+                                }
+
+                                function cleanup() {
+                                    const modal = document.getElementById("qrScannerModal");
+                                    const video = document.getElementById("qrVideo");
+
+                                    if (modal) modal.classList.add("hidden");
+                                    if (_stream) {
+                                        _stream.getTracks().forEach(t => t.stop());
+                                        _stream = null;
+                                    }
+                                    if (video) {
+                                        video.pause();
+                                        video.srcObject = null;
+                                    }
+                                    if (_canvas) {
+                                        _canvas.remove();
+                                        _canvas = null;
+                                    }
+                                }
+
+                                window.startScan = startScan;
+                                window.stopScan = stopScan;
+                            })();
+                            </script>
+
+
 
                             <!-- AMOUNT Field -->
                             <div>
-                                <label for="updateAmount"
+                                <label for="updateAmount" id="lableforupdateAmount"
                                     class="block text-sm font-medium text-zinc-400 mb-2">
                                     Amount Paying
                                 </label>
@@ -91,18 +206,34 @@
                                     name="updateAmount"
                                     required
                                     class="w-full bg-zinc-700 border-0 rounded-lg px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-zinc-800 transition-all duration-200"
-                                    placeholder="0.00">
+                                    placeholder="0.00"
+                                    >
                             </div>
-                            <!-- INVOICE_NUM Field -->
+                            <!-- INVOICE_NUM Field ==> UID (Auto-filled) -->
                             <div>
                                 <label for="updateInvoiceNum"
                                     class="block text-sm font-medium text-zinc-400 mb-2">
-                                    Invoice Number
+                                    UID (Auto-filled)
                                 </label>
                                 <input
                                     type="text"
                                     id="updateInvoiceNum"
                                     name="updateInvoiceNum"
+                                    required
+                                    class="w-full bg-zinc-700 border-0 rounded-lg px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-zinc-800 transition-all duration-200"
+                                    placeholder="0.00"
+                                    readonly>
+                            </div>
+                            <!-- INVOICE_NUM Field ==> UID (Auto-filled) -->
+                            <div>
+                                <label for="totalAmount"
+                                    class="block text-sm font-medium text-zinc-400 mb-2">
+                                    Total Amount (Auto-filled)
+                                </label>
+                                <input
+                                    type="text"
+                                    id="totalAmount"
+                                    name="totalAmount"
                                     required
                                     class="w-full bg-zinc-700 border-0 rounded-lg px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-zinc-800 transition-all duration-200"
                                     placeholder="0.00"
@@ -146,8 +277,7 @@
                 <!-- Table Header -->
                 <div
                     class="px-8 py-6 border-b border-zinc-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <h2 class="text-2xl font-semibold text-zinc-100">Records
-                        Database</h2>
+                    <h2 class="text-2xl font-semibold text-zinc-100">Records Database</h2>
                     <button
                         onclick="window.location.reload();"
                         class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-lg transition-all duration-200 text-sm font-medium border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-600 focus:ring-offset-zinc-800">
@@ -190,7 +320,15 @@
                                 </th>
                                 <th
                                     class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
+                                    Due Amount
+                                </th>
+                                <th
+                                    class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
                                     Remark
+                                </th>
+                                <th
+                                    class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
+                                    Details
                                 </th>
                             </tr>
                         </thead>
@@ -257,7 +395,7 @@
                 getdata(0);
                 return;
             }
-            fetch(`http://127.0.0.1:8000/api/get_data_by_uid?uid=${this.value}`, {
+            fetch(`http://127.0.0.1:8000/api/get_data_by_invoice_id?invoice_num=${this.value}`, {
                 method: "GET",
                 headers: {
                     "Content-Type": "application/json"
@@ -270,7 +408,11 @@
             .then(data => {
                 if (data.length > 0) {
                     const record = data[0];
-                    document.getElementById('updateInvoiceNum').value = record.invoiceNum || '';
+                    document.getElementById('updateInvoiceNum').value = record.uid || '';
+                    document.getElementById('updateAmount').min = 0;
+                    document.getElementById('updateAmount').max = record.remainingAmount || record.amount || 0;
+                    document.getElementById('lableforupdateAmount').textContent = `Amount Paying (Max: ₹${(record.remainingAmount || record.amount || 0).toFixed(2)})`;
+                    document.getElementById('totalAmount').value = `₹${(record.amount || 0).toFixed(2)}`;
                     loadTableData(data);
                 }
                 
@@ -286,9 +428,10 @@
 
             // Get form data
             const updateData = {
-                uid: document.getElementById('updateUid').value,
-                invoiceNum: document.getElementById('updateInvoiceNum').value,
-                paid_amount: document.getElementById('updateAmount').value
+                invoiceNum: document.getElementById('updateUid').value,
+                uid: document.getElementById('updateInvoiceNum').value,
+                paid_amount: document.getElementById('updateAmount').value,
+                total_amount: document.getElementById('totalAmount').value.replace('₹','')
             };
 
             // Show message container
@@ -301,7 +444,7 @@
             errorMessage.classList.add('hidden');
 
             // Make fetch request to Django API
-            fetch(`http://127.0.0.1:8000/api/update_payment/?uid=${encodeURIComponent(updateData.uid)}&invoice_num=${encodeURIComponent(updateData.invoiceNum)}&paid_amount=${encodeURIComponent(updateData.paid_amount)}`)
+            fetch(`http://127.0.0.1:8000/api/update_payment/?uid=${encodeURIComponent(updateData.uid)}&invoice_num=${encodeURIComponent(updateData.invoiceNum)}&paid_amount=${encodeURIComponent(updateData.paid_amount)}&total_amount=${encodeURIComponent(updateData.total_amount)}`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.message) {
@@ -376,6 +519,7 @@
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">${record.date}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">₹${record.amount.toFixed(2)}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">₹${record.paidAmount.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">₹${record.remainingAmount}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm">
                         <span class="px-3 py-1 rounded-lg text-xs font-medium ${
                             record.remark === 'Paid' ? 'bg-green-900/40 text-green-400' :
@@ -384,6 +528,9 @@
                         }">
                             ${record.remark}
                         </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <a href="${record.see_details}" class="text-blue-400 hover:underline">See Details</a>
                     </td>
                 `;
                 

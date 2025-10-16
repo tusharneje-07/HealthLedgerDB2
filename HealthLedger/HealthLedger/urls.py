@@ -24,11 +24,13 @@ urlpatterns = [
     path('new_record/', views.CREATE, name='home'),
     path('update_record/', views.UPDATE, name='update'),
     path('view_all/', views.VIEW_ALL, name='view_all'),
+    path('invoice/<str:invoice_num>/', views.detailed_invoice_view, name='view_all'),
     path('logout/', views.LOGOUT, name='logout'),
     
     
     # APIS
     path('api/get_data_by_uid', views.get_data_by_uid, name='get_data_by_uid'),
+    path('api/get_data_by_invoice_id', views.get_data_by_invoice_id, name='get_data_by_invoice_id'),
     path('api/update_payment/', views.update_payment, name='update_payment'),
     path('api/load_data/', views.load_data, name='load_data'),
     path('api/recent-activity/', views.recent_activity, name='recent_activity'),

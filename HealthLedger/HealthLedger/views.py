@@ -47,7 +47,65 @@ def get_data_by_uid(request):
         "date": str(row['DATE']),
         "amount": amount,
         "paidAmount": paid_amount,
+        "remainingAmount": max(0, amount - paid_amount),
         "remark": remark,
+        "see_details" : "/invoice/"+row['INNVOCE_NUM']
+    }
+
+    return JsonResponse([send_data], safe=False)
+
+def get_data_by_invoice_id(request):
+    invoice_num = request.GET.get('invoice_num')
+    if not invoice_num:
+        return JsonResponse({"error": "Invoice number is required"}, status=400)
+
+    # 🧩 Single optimized JOIN query to fetch both patient and payment info
+    query = f"""
+        SELECT 
+            p.REC_NUMBER,
+            p.UID,
+            p.USERNAME,
+            p.INNVOCE_NUM,
+            p.DATE,
+            p.AMOUNT,
+            COALESCE(r.PAID_AMT, 0) AS PAID_AMT
+        FROM patient_data p
+        LEFT JOIN register r
+        ON p.UID = r.UID AND p.INNVOCE_NUM = r.INNVOCE_NUM
+        WHERE p.INNVOCE_NUM = '{invoice_num}'
+        FETCH FIRST 1 ROW ONLY
+    """
+
+    success, result = DB2Query.runSelectQuery(query)
+    if not success or not result:
+        return JsonResponse([], safe=False)
+
+    row = result[0]
+    amount = float(row['AMOUNT'])
+    
+    paid_amount = 0
+    
+    query = f"SELECT PAID_AMOUNT_ON_DATE FROM INVOICE_LOGS WHERE INVOICE_NUMBER = '{invoice_num}' ORDER BY LOG_DATE DESC"
+    a,b = DB2Query.runSelectQuery(query)
+    print(a,b)
+    if a and b and len(b) > 0:
+        for log in b:
+            if log['PAID_AMOUNT_ON_DATE'] is not None:
+                paid_amount += float(log['PAID_AMOUNT_ON_DATE'])
+    
+    remark = "Paid" if paid_amount >= amount else "Pending"
+
+    send_data = {
+        "recNumber": row['REC_NUMBER'],
+        "uid": row['UID'],
+        "username": row['USERNAME'],
+        "invoiceNum": row['INNVOCE_NUM'],
+        "date": str(row['DATE']),
+        "amount": amount,
+        "paidAmount": paid_amount,
+        "remainingAmount": max(0, amount - paid_amount),
+        "remark": remark,
+        "see_details" : "/invoice/"+row['INNVOCE_NUM']
     }
 
     return JsonResponse([send_data], safe=False)
@@ -56,6 +114,7 @@ def update_payment(request):
     uid = request.GET.get("uid")
     invoice_num = request.GET.get("invoice_num")
     paid_amount = request.GET.get("paid_amount")
+    total_amount = request.GET.get("total_amount")
 
     if not uid or not invoice_num or not paid_amount:
         return JsonResponse({"error": "uid, invoice_num, and paid_amount are required"}, status=400)
@@ -72,12 +131,24 @@ def update_payment(request):
         current_timestamp = datetime.now()
         query = f"INSERT INTO activity (log_name, log_desc, log_date_time) VALUES ('Payment Update', 'Payment updated of user {uid} to {paid_amount}', '{current_timestamp}')"
         a,b = DB2Query.runQuery(query)
+        query = f"INSERT INTO INVOICE_LOGS (INVOICE_NUMBER, UID, LOG_DATE, AMOUNT, PAID_AMOUNT_ON_DATE, REMAINING_AMOUNT_ON_DATE, LOG_REMARK) VALUES ('{invoice_num}', '{uid}', '{current_timestamp}', {total_amount}, {paid_amount}, {max(0, float(paid_amount) - (float(total_amount) - float(paid_amount)))}, 'Payment updated');"
+        
+        a,b = DB2Query.runQuery(query)
+        print(query,a,b)
+        
+        
         return JsonResponse({"message": "Payment updated successfully"})
     else:
         return JsonResponse({"error": f"Failed to update payment: {msg}"}, status=500)
     
 def load_data(request):
-    query = """
+    size = request.GET.get('size', 100)
+    if not size and not str(size).isdigit():
+        return JsonResponse({"error": "Size must be a number"}, status=400)
+    size = int(size)
+    if size <= 0 or size > 1000:
+        return JsonResponse({"error": "Size must be between 1 and 1000"}, status=400)
+    query = f"""
         SELECT 
             p.REC_NUMBER, 
             p.UID, 
@@ -89,7 +160,7 @@ def load_data(request):
         FROM patient_data p
         LEFT JOIN register r
         ON p.UID = r.UID AND p.INNVOCE_NUM = r.INNVOCE_NUM
-        FETCH FIRST 100 ROWS ONLY
+        FETCH FIRST {size} ROWS ONLY
     """
 
     success, result = DB2Query.runSelectQuery(query)
@@ -101,18 +172,29 @@ def load_data(request):
 
     for row in result:
         amount = float(row['AMOUNT'])
-        paid_amount = float(row['PAID_AMT']) if row['PAID_AMT'] is not None else 0.0
+        paid_amount = 0
+    
+        query = f"SELECT PAID_AMOUNT_ON_DATE FROM INVOICE_LOGS WHERE INVOICE_NUMBER = '{row['INNVOCE_NUM']}' ORDER BY LOG_DATE DESC"
+        a,b = DB2Query.runSelectQuery(query)
+        print(a,b)
+        if a and b and len(b) > 0:
+            for log in b:
+                if log['PAID_AMOUNT_ON_DATE'] is not None:
+                    paid_amount += float(log['PAID_AMOUNT_ON_DATE'])
+        
         remark = "Paid" if paid_amount >= amount else "Pending"
 
         formatted_result.append({
             "recNumber": row['REC_NUMBER'],
-            "uid": row['UID'],
-            "username": row['USERNAME'],
-            "invoiceNum": row['INNVOCE_NUM'],
-            "date": str(row['DATE']),
-            "amount": amount,
-            "paidAmount": paid_amount,
-            "remark": remark,
+        "uid": row['UID'],
+        "username": row['USERNAME'],
+        "invoiceNum": row['INNVOCE_NUM'],
+        "date": str(row['DATE']),
+        "amount": amount,
+        "paidAmount": paid_amount,
+        "remainingAmount": max(0, amount - paid_amount),
+        "remark": remark,
+        "see_details" : "/invoice/"+row['INNVOCE_NUM']
         })
 
     return JsonResponse(formatted_result, safe=False)
@@ -262,3 +344,62 @@ def ADD_NEW_DATA(request):
     
 def LOGOUT(request):
     return render(request, 'src/LOGOUT.html')
+
+def detailed_invoice_view(request, invoice_num):
+    # Fetch detailed invoice data based on invoice_num
+    query = f"""
+        SELECT 
+            p.REC_NUMBER, 
+            p.UID, 
+            p.USERNAME, 
+            p.INNVOCE_NUM, 
+            p.DATE, 
+            p.AMOUNT,
+            COALESCE(r.PAID_AMT, 0) AS PAID_AMT
+        FROM patient_data p
+        LEFT JOIN register r
+        ON p.UID = r.UID AND p.INNVOCE_NUM = r.INNVOCE_NUM
+        WHERE p.INNVOCE_NUM = '{invoice_num}'
+        FETCH FIRST 1 ROW ONLY
+    """
+
+    success, result = DB2Query.runSelectQuery(query)
+    
+    if not success or not result:
+        return JsonResponse({"error": "Invoice not found"}, status=404)
+    
+    row = result[0]
+    amount = float(row['AMOUNT'])
+    
+    paid_amount = 0
+    
+    query = f"SELECT * FROM INVOICE_LOGS WHERE INVOICE_NUMBER = '{invoice_num}' ORDER BY LOG_DATE DESC"
+    a,b = DB2Query.runSelectQuery(query)
+    amount_logs = []
+    if a and b and len(b) > 0:
+        for log in b:
+            if log['PAID_AMOUNT_ON_DATE'] is not None:
+                amount_logs.append({
+                    'date' : log['LOG_DATE'],
+                    'paid_amount_on_date' : float(log['PAID_AMOUNT_ON_DATE']),
+                    'log_remark' : log['LOG_REMARK']
+                })
+                paid_amount += float(log['PAID_AMOUNT_ON_DATE'])
+    
+    
+    remark = "Paid" if paid_amount >= amount else "Pending"
+
+    invoice_data = {
+        "recNumber": row['REC_NUMBER'],
+        "uid": row['UID'],
+        "username": row['USERNAME'],
+        "invoiceNum": row['INNVOCE_NUM'],
+        "date": str(row['DATE']),
+        "amount": amount,
+        "paidAmount": paid_amount,
+        "remainingAmount": max(0, amount - paid_amount),
+        "detailed_logs": amount_logs,
+        "remark": remark,
+    }
+    return JsonResponse(invoice_data)
+    return render(request, 'src/INVOICE_DETAIL.html', {"invoice": invoice_data})
