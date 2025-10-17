@@ -263,8 +263,9 @@
                             </button> {% endcomment %}
                             <button
                                 type="submit"
-                                class="flex-1 px-6 py-3 bg-zinc-200 hover:bg-zinc-100 text-zinc-900 font-medium rounded-lg transition-all duration-200 border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-200 focus:ring-offset-zinc-800">
-                                Update Record
+                                id="submit_button"
+                                class="flex-1 px-6 py-3 bg-zinc-200 hover:bg-zinc-100 text-zinc-900 font-medium rounded-lg transition-all duration-200 border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-200 focus:ring-offset-zinc-800 cursor-not-allowed" disabled>
+                                Enter or Scan Invoice Number to Update
                             </button>
                         </div>
                     </form>
@@ -279,6 +280,7 @@
                     class="px-8 py-6 border-b border-zinc-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <h2 class="text-2xl font-semibold text-zinc-100">Records Database</h2>
                     <button
+                        id="refresh_button"
                         onclick="window.location.reload();"
                         class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-lg transition-all duration-200 text-sm font-medium border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-600 focus:ring-offset-zinc-800">
                         Refresh
@@ -335,8 +337,8 @@
                         <tbody id="tableBody" class="divide-y divide-zinc-700">
                             <!-- Table rows will be dynamically inserted here -->
                             <tr class="text-center">
-                                <td colspan="8"
-                                    class="px-6 py-12 text-zinc-400">
+                                <td colspan="10"
+                                    class="px-6 py-12 text-zinc-400 flex items-center justify-center">
                                     <div
                                         class="flex flex-col items-center space-y-3">
                                         <svg class="w-12 h-12 text-zinc-600"
@@ -347,8 +349,7 @@
                                                 stroke-width="2"
                                                 d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                                         </svg>
-                                        <p class="text-lg">Loading
-                                            records...</p>
+                                        <p class="text-lg">Loading records...</p>
                                     </div>
                                 </td>
                             </tr>
@@ -378,6 +379,10 @@
     <script>
         // Record Fetcher
         document.getElementById('updateUid').addEventListener('input', function() {
+            document.getElementById('submit_button').disabled = true;
+            document.getElementById('submit_button').textContent = 'Fetching...';
+            document.getElementById('submit_button').classList.add('cursor-not-allowed');
+
             loadTableData([
                 {
                     recNumber: '--',
@@ -387,11 +392,13 @@
                     date: '---',
                     amount: 0,
                     paidAmount: 0,
+                    remainingAmount: 0,
                     remark: 'Loading...'
                 }
             ])
             if(this.value.trim() === ''){
                 document.getElementById('updateInvoiceNum').value = '';
+                document.getElementById('submit_button').textContent = 'Enter or Scan Invoice Number to Update';
                 getdata(0);
                 return;
             }
@@ -410,9 +417,27 @@
                     const record = data[0];
                     document.getElementById('updateInvoiceNum').value = record.uid || '';
                     document.getElementById('updateAmount').min = 0;
-                    document.getElementById('updateAmount').max = record.remainingAmount || record.amount || 0;
-                    document.getElementById('lableforupdateAmount').textContent = `Amount Paying (Max: ₹${(record.remainingAmount || record.amount || 0).toFixed(2)})`;
-                    document.getElementById('totalAmount').value = `₹${(record.amount || 0).toFixed(2)}`;
+                    document.getElementById('totalAmount').value = `₹${(record.amount).toFixed(2)}`;
+
+                    if(record.remainingAmount <= 0){
+                        document.getElementById('updateAmount').max = 0;
+                        document.getElementById('updateAmount').disabled = true;
+                        document.getElementById('lableforupdateAmount').textContent = `Amount Paying (No Due Amount)`;
+                        document.getElementById('submit_button').disabled = true;
+                        document.getElementById('submit_button').textContent = 'No Due Amount';
+                        document.getElementById('submit_button').classList.add('cursor-not-allowed');
+
+
+                    } else {
+                        document.getElementById('updateAmount').disabled = false;
+                        document.getElementById('updateAmount').max = record.remainingAmount;
+                        document.getElementById('lableforupdateAmount').textContent = `Amount Paying (Max: ₹${(record.remainingAmount).toFixed(2)})`;
+                        document.getElementById('submit_button').disabled = false;
+                        document.getElementById('submit_button').textContent = 'Update Payment';
+                        document.getElementById('submit_button').classList.remove('cursor-not-allowed');
+
+                    }
+                    
                     loadTableData(data);
                 }
                 
@@ -424,7 +449,7 @@
 
         // Update form submission handler
         document.getElementById('updateForm').addEventListener('submit', function(e) {
-            e.preventDefault(); // Prevent default form submission
+            e.preventDefault();
 
             // Get form data
             const updateData = {
@@ -438,10 +463,20 @@
             const messageContainer = document.getElementById('updateMessageContainer');
             const successMessage = document.getElementById('updateSuccessMessage');
             const errorMessage = document.getElementById('updateErrorMessage');
+            const submitButton = document.getElementById('submit_button');
+            const refreshButton = document.getElementById('refresh_button');
 
             messageContainer.classList.remove('hidden');
             successMessage.classList.add('hidden');
             errorMessage.classList.add('hidden');
+            submitButton.textContent = 'Updating...';
+            submitButton.disabled = true;
+
+            refreshButton.disabled = true;
+            refreshButton.classList.remove('bg-zinc-700', 'hover:bg-zinc-600');
+            refreshButton.classList.add('opacity-70', 'cursor-not-allowed','animate-pulse', 'bg-green-900/30');
+            refreshButton.textContent = 'Updating...';
+
 
             // Make fetch request to Django API
             fetch(`http://127.0.0.1:8000/api/update_payment/?uid=${encodeURIComponent(updateData.uid)}&invoice_num=${encodeURIComponent(updateData.invoiceNum)}&paid_amount=${encodeURIComponent(updateData.paid_amount)}&total_amount=${encodeURIComponent(updateData.total_amount)}`)
@@ -457,8 +492,15 @@
                         document.getElementById('updateUid').value = '';
                         document.getElementById('updateInvoiceNum').value = '';
                         document.getElementById('updateAmount').value = '';
+                        submitButton.textContent = 'Update Record';
+                        submitButton.disabled = false;
 
-                        // Optionally show temporary "loading" row
+                        document.getElementById('lableforupdateAmount').textContent = `Amount Paying`;
+                        refreshButton.disabled = false;
+                        refreshButton.classList.remove('opacity-70', 'cursor-not-allowed','animate-pulse', 'bg-green-900/30');
+                        refreshButton.classList.add('bg-zinc-700', 'hover:bg-zinc-600');
+                        refreshButton.textContent = 'Refresh';
+
                         loadTableData([{
                             recNumber: '--',
                             uid: updateData.uid,
@@ -467,14 +509,12 @@
                             date: '---',
                             amount: 0,
                             paidAmount: 0,
+                            remainingAmount: 0,
                             remark: 'Loading...'
                         }]);
 
-                        // Reload table data after 2 seconds
-                        setTimeout(() => {
-                            getdata(0);
-                            messageContainer.classList.add('hidden');
-                        }, 2000);
+                        load_invoice_record(updateData.invoiceNum);
+                        messageContainer.classList.add('hidden');
                     } else if (data.error) {
                         // Error
                         errorMessage.textContent = data.error;
@@ -530,7 +570,9 @@
                         </span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm">
-                        <a href="${record.see_details}" class="text-blue-400 hover:underline">See Details</a>
+                        <span class="px-3 py-1 rounded-lg text-xs font-medium bg-blue-900/40 text-blue-400 cursor-pointer" onclick="show_details_popup(JSON.parse(decodeURIComponent('${encodeURIComponent(JSON.stringify(record))}')))">
+                            Details
+                        </span>
                     </td>
                 `;
                 
@@ -550,22 +592,261 @@
         function getdata(offset){
             document.getElementById('loadingIndicator').classList.remove('hidden');
             
-            setTimeout(() => {
-                document.getElementById('loadingIndicator').classList.add('hidden');
-            }, 2000);
             fetch(`http://127.0.0.1:8000/api/load_data/?offset=${offset}`, {
-                    method: "GET",
-                    headers: {
-                        "Content-Type": "application/json"
-                    }
-                }).then(response => {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json"
+                }
+            }).then(response => {
                     if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                    document.getElementById('loadingIndicator').classList.add('hidden');
                     return response.json();
                 }).then(data => {
                     loadTableData(data);
                 }).catch(error => {
                     console.error("Error fetching data:", error);
                 });
+        }
+
+        function load_invoice_record(invoice_num){
+            fetch(`http://127.0.0.1:8000/api/get_data_by_invoice_id?invoice_num=${invoice_num}`, {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json"
+                }
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                if (data.length > 0) {                    
+                    loadTableData(data);
+                }
+                
+            })
+            .catch(error => {
+                console.error("Error fetching data:", error);
+            });
+        }
+    </script>
+
+    <!-- Details Popup Modal -->
+    <div id="detailsPopup" class="fixed inset-0 z-60 hidden bg-black/60 pt-20 items-start justify-center">
+        <div class="bg-zinc-800 rounded-lg p-6 w-full max-w-3xl mx-4 flex flex-col" style="max-height: calc(100vh - 5rem);">
+            <!-- Header -->
+            <div class="flex justify-between items-start mb-4 flex-shrink-0">
+                <div>
+                    <h3 id="dp_title" class="text-lg font-semibold text-zinc-100">Record Details</h3>
+                    <p id="dp_sub" class="text-sm text-zinc-400">Invoice details and payment logs</p>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button id="closeDetailsBtn" class="px-3 py-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-lg text-sm" onclick="close_details_popup()">Close</button>
+                </div>
+            </div>
+
+            <!-- Content (scrollable) -->
+            <div class="overflow-auto flex-1 min-h-0">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div class="space-y-2">
+                        <div class="text-sm text-zinc-400">REC Number</div>
+                        <div id="dp_recNumber" class="text-zinc-100 font-medium">--</div>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="text-sm text-zinc-400">UID</div>
+                        <div id="dp_uid" class="text-zinc-100 font-medium">--</div>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="text-sm text-zinc-400">Username</div>
+                        <div id="dp_username" class="text-zinc-100 font-medium">--</div>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="text-sm text-zinc-400">Invoice Number</div>
+                        <div id="dp_invoiceNum" class="text-zinc-100 font-medium">--</div>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="text-sm text-zinc-400">Date</div>
+                        <div id="dp_date" class="text-zinc-100 font-medium">--</div>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="text-sm text-zinc-400">Amount</div>
+                        <div id="dp_amount" class="text-zinc-100 font-medium">--</div>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="text-sm text-zinc-400">Paid Amount</div>
+                        <div id="dp_paidAmount" class="text-zinc-100 font-medium">--</div>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="text-sm text-zinc-400">Remaining Amount</div>
+                        <div id="dp_remainingAmount" class="text-zinc-100 font-medium">--</div>
+                    </div>
+                    <div class="col-span-1 md:col-span-2 space-y-2">
+                        <div class="text-sm text-zinc-400">Remark</div>
+                        <div id="dp_remark" class="text-zinc-100 font-medium">--</div>
+                    </div>
+                </div>
+
+                <div>
+                    <h4 class="text-sm font-medium text-zinc-100 mb-2">Payment Installments</h4>
+                    <div class="overflow-auto border border-zinc-700 rounded" style="max-height: calc(100vh - 22rem);">
+                        <table class="w-full text-sm">
+                            <thead class="bg-zinc-900 text-zinc-400 sticky top-0">
+                                <tr>
+                                    <th class="px-4 py-2 text-left">Date</th>
+                                    <th class="px-4 py-2 text-left">Time</th>
+                                    <th class="px-4 py-2 text-left">Paid Amount</th>
+                                    <th class="px-4 py-2 text-left">Remark</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dp_logs" class="divide-y divide-zinc-700 bg-transparent text-zinc-100">
+                                <!-- Log rows inserted dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer with Print and Download -->
+            <div class="mt-4 flex justify-end gap-3 flex-shrink-0">
+                <button type="button" onclick="printDetailsPopup()" class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-lg text-sm">Print</button>
+                <button type="button" onclick="downloadDetailsCSV()" class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-lg text-sm">Download CSV</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Print the popup content in a new window (includes current stylesheet href)
+        function printDetailsPopup() {
+            const invoiceNum = document.getElementById('dp_invoiceNum').textContent.trim();
+            window.open(`/print/${invoiceNum}`, '_blank');    
+        }
+
+        // Download popup details (summary + logs) as CSV
+        function downloadDetailsCSV() {
+            try {
+                const rows = [];
+                // Header info
+                rows.push(['Field', 'Value']);
+                rows.push(['REC Number', document.getElementById('dp_recNumber').textContent.trim()]);
+                rows.push(['UID', document.getElementById('dp_uid').textContent.trim()]);
+                rows.push(['Username', document.getElementById('dp_username').textContent.trim()]);
+                rows.push(['Invoice Number', document.getElementById('dp_invoiceNum').textContent.trim()]);
+                rows.push(['Date', document.getElementById('dp_date').textContent.trim()]);
+                rows.push(['Amount', document.getElementById('dp_amount').textContent.trim()]);
+                rows.push(['Paid Amount', document.getElementById('dp_paidAmount').textContent.trim()]);
+                rows.push(['Remaining Amount', document.getElementById('dp_remainingAmount').textContent.trim()]);
+                rows.push(['Remark', document.getElementById('dp_remark').textContent.trim()]);
+                rows.push([]); // empty line
+                // Logs header
+                rows.push(['Log Date', 'Log Time', 'Paid Amount', 'Remark']);
+
+                const logRows = Array.from(document.querySelectorAll('#dp_logs tr'));
+                if (logRows.length === 0) {
+                    // nothing
+                } else {
+                    logRows.forEach(tr => {
+                        const cols = Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim().replace(/\n+/g,' '));
+                        rows.push(cols);
+                    });
+                }
+
+                // Convert to CSV string (basic escaping)
+                const csvContent = rows.map(r => r.map(c => {
+                    if (c == null) return '';
+                    const escaped = String(c).replace(/"/g, '""');
+                    return `"${escaped}"`;
+                }).join(',')).join('\n');
+
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const invoice = document.getElementById('dp_invoiceNum').textContent.trim() || 'record';
+                const filename = invoice + '_details_' + new Date().toISOString().slice(0,19).replace(/[:T]/g,'-') + '.csv';
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(link.href);
+            } catch (e) {
+                console.error('Download error', e);
+            }
+        }
+    </script>
+
+    <script>
+        // Show details popup with record data
+        function show_details_popup(record) {
+            console.log('Showing details popup for record:', record);
+            console.log(typeof record);
+            try {
+                document.getElementById('dp_recNumber').textContent = record.recNumber ?? '--';
+                document.getElementById('dp_uid').textContent = record.uid ?? '--';
+                document.getElementById('dp_username').textContent = record.username ?? '--';
+                document.getElementById('dp_invoiceNum').textContent = record.invoiceNum ?? '--';
+                document.getElementById('dp_date').textContent = record.date ?? '--';
+                document.getElementById('dp_amount').textContent = '₹' + (Number(record.amount) || 0).toFixed(2);
+                document.getElementById('dp_paidAmount').textContent = '₹' + (Number(record.paidAmount) || 0).toFixed(2);
+                document.getElementById('dp_remainingAmount').textContent = '₹' + (Number(record.remainingAmount) || 0).toFixed(2);
+                document.getElementById('dp_remark').textContent = record.remark ?? '--';
+
+                const logsTbody = document.getElementById('dp_logs');
+                logsTbody.innerHTML = '';
+
+                const logs = Array.isArray(record.detailed_logs) ? record.detailed_logs : [];
+                if (logs.length === 0) {
+                    logsTbody.innerHTML = '<tr><td class="px-4 py-3 text-zinc-400" colspan="4">No logs available</td></tr>';
+                } else {
+                    // Sort logs most recent first by the date string
+                    logs.slice().sort((a,b) => new Date(a.date) - new Date(b.date)).forEach(log => {
+                        let d = '';
+                        let t = '';
+                        if (log.date) {
+                            // Split ISO date/time if present
+                            const dt = new Date(log.date);
+                            if (!isNaN(dt)) {
+                                // Format date as YYYY-MM-DD and time as HH:MM:SS
+                                const yyyy = dt.getFullYear();
+                                const mm = String(dt.getMonth()+1).padStart(2,'0');
+                                const dd = String(dt.getDate()).padStart(2,'0');
+                                const hh = String(dt.getHours()).padStart(2,'0');
+                                const min = String(dt.getMinutes()).padStart(2,'0');
+                                const ss = String(dt.getSeconds()).padStart(2,'0');
+                                d = `${yyyy}-${mm}-${dd}`;
+                                t = `${hh}:${min}:${ss}`;
+                            } else {
+                                // Fallback: try splitting on 'T' or space
+                                const parts = String(log.date).split(/T|\s/);
+                                d = parts[0] || '';
+                                t = parts[1] ? parts[1].split('.')[0] : '';
+                            }
+                        }
+
+                        const row = document.createElement('tr');
+                        row.className = 'bg-transparent';
+                        row.innerHTML = `
+                            <td class="px-4 py-3 text-zinc-300">${d}</td>
+                            <td class="px-4 py-3 text-zinc-300">${t}</td>
+                            <td class="px-4 py-3 text-zinc-300">₹${(Number(log.paid_amount_on_date)||0).toFixed(2)}</td>
+                            <td class="px-4 py-3 text-zinc-300">${log.log_remark || ''}</td>
+                        `;
+                        logsTbody.appendChild(row);
+                    });
+                }
+
+                const modal = document.getElementById('detailsPopup');
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            } catch (e) {
+                console.error('Error showing details popup', e);
+            }
+        }
+
+        function close_details_popup() {
+            const modal = document.getElementById('detailsPopup');
+            if (modal) {
+                modal.classList.remove('flex');
+                modal.classList.add('hidden');
+            }
         }
     </script>
     </body>

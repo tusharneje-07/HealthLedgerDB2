@@ -2,6 +2,7 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from .DB2 import DB2Query
 from datetime import datetime
+from collections import defaultdict
 
 def CREATE(request):
     return render(request, 'src/CREATE.html')
@@ -59,8 +60,8 @@ def get_data_by_invoice_id(request):
     if not invoice_num:
         return JsonResponse({"error": "Invoice number is required"}, status=400)
 
-    # 🧩 Single optimized JOIN query to fetch both patient and payment info
-    query = f"""
+    # Fetch invoice summary with aggregated paid amount (no N+1)
+    invoice_query = f"""
         SELECT 
             p.REC_NUMBER,
             p.UID,
@@ -68,47 +69,63 @@ def get_data_by_invoice_id(request):
             p.INNVOCE_NUM,
             p.DATE,
             p.AMOUNT,
-            COALESCE(r.PAID_AMT, 0) AS PAID_AMT
+            COALESCE(SUM(il.PAID_AMOUNT_ON_DATE), 0) AS PAID_AMOUNT
         FROM patient_data p
         LEFT JOIN register r
-        ON p.UID = r.UID AND p.INNVOCE_NUM = r.INNVOCE_NUM
+            ON p.UID = r.UID AND p.INNVOCE_NUM = r.INNVOCE_NUM
+        LEFT JOIN INVOICE_LOGS il
+            ON p.INNVOCE_NUM = il.INVOICE_NUMBER
         WHERE p.INNVOCE_NUM = '{invoice_num}'
+        GROUP BY 
+            p.REC_NUMBER, p.UID, p.USERNAME, 
+            p.INNVOCE_NUM, p.DATE, p.AMOUNT
         FETCH FIRST 1 ROW ONLY
     """
-
-    success, result = DB2Query.runSelectQuery(query)
+    success, result = DB2Query.runSelectQuery(invoice_query)
     if not success or not result:
         return JsonResponse([], safe=False)
 
     row = result[0]
-    amount = float(row['AMOUNT'])
-    
-    paid_amount = 0
-    
-    query = f"SELECT PAID_AMOUNT_ON_DATE FROM INVOICE_LOGS WHERE INVOICE_NUMBER = '{invoice_num}' ORDER BY LOG_DATE DESC"
-    a,b = DB2Query.runSelectQuery(query)
-    print(a,b)
-    if a and b and len(b) > 0:
-        for log in b:
-            if log['PAID_AMOUNT_ON_DATE'] is not None:
-                paid_amount += float(log['PAID_AMOUNT_ON_DATE'])
-    
+    amount = float(row["AMOUNT"])
+    paid_amount = float(row.get("PAID_AMOUNT", 0))
+    remaining = max(0, amount - paid_amount)
     remark = "Paid" if paid_amount >= amount else "Pending"
 
+    # Fetch all logs for this invoice
+    log_query = f"""
+        SELECT LOG_DATE, PAID_AMOUNT_ON_DATE, LOG_REMARK
+        FROM INVOICE_LOGS
+        WHERE INVOICE_NUMBER = '{invoice_num}'
+        ORDER BY LOG_DATE DESC
+    """
+    log_success, log_result = DB2Query.runSelectQuery(log_query)
+
+    detailed_logs = []
+    if log_success and log_result:
+        for log in log_result:
+            if log.get("PAID_AMOUNT_ON_DATE") is not None:
+                detailed_logs.append({
+                    "date": str(log["LOG_DATE"]),
+                    "paid_amount_on_date": float(log["PAID_AMOUNT_ON_DATE"] or 0),
+                    "log_remark": log.get("LOG_REMARK"),
+                })
+
     send_data = {
-        "recNumber": row['REC_NUMBER'],
-        "uid": row['UID'],
-        "username": row['USERNAME'],
-        "invoiceNum": row['INNVOCE_NUM'],
-        "date": str(row['DATE']),
+        "recNumber": row["REC_NUMBER"],
+        "uid": row["UID"],
+        "username": row["USERNAME"],
+        "invoiceNum": row["INNVOCE_NUM"],
+        "date": str(row["DATE"]),
         "amount": amount,
         "paidAmount": paid_amount,
-        "remainingAmount": max(0, amount - paid_amount),
+        "remainingAmount": remaining,
         "remark": remark,
-        "see_details" : "/invoice/"+row['INNVOCE_NUM']
+        "detailed_logs": detailed_logs,
+        "see_details": "/invoice/" + row["INNVOCE_NUM"],
     }
 
     return JsonResponse([send_data], safe=False)
+
 
 def update_payment(request):
     uid = request.GET.get("uid")
@@ -116,39 +133,69 @@ def update_payment(request):
     paid_amount = request.GET.get("paid_amount")
     total_amount = request.GET.get("total_amount")
 
+    # ✅ 1. Input validation
     if not uid or not invoice_num or not paid_amount:
-        return JsonResponse({"error": "uid, invoice_num, and paid_amount are required"}, status=400)
+        return JsonResponse(
+            {"error": "uid, invoice_num, and paid_amount are required"}, status=400
+        )
 
     try:
         paid_amount = float(paid_amount)
+        total_amount = float(total_amount) if total_amount else 0.0
     except ValueError:
-        return JsonResponse({"error": "paid_amount must be a number"}, status=400)
+        return JsonResponse(
+            {"error": "paid_amount and total_amount must be numeric"}, status=400
+        )
 
-    query = f"UPDATE register SET PAID_AMT = {paid_amount} WHERE UID = '{uid}' AND INNVOCE_NUM = '{invoice_num}'"
-    
-    success, msg = DB2Query.runQuery(query)
-    if success:
-        current_timestamp = datetime.now()
-        query = f"INSERT INTO activity (log_name, log_desc, log_date_time) VALUES ('Payment Update', 'Payment updated of user {uid} to {paid_amount}', '{current_timestamp}')"
-        a,b = DB2Query.runQuery(query)
-        query = f"INSERT INTO INVOICE_LOGS (INVOICE_NUMBER, UID, LOG_DATE, AMOUNT, PAID_AMOUNT_ON_DATE, REMAINING_AMOUNT_ON_DATE, LOG_REMARK) VALUES ('{invoice_num}', '{uid}', '{current_timestamp}', {total_amount}, {paid_amount}, {max(0, float(paid_amount) - (float(total_amount) - float(paid_amount)))}, 'Payment updated');"
-        
-        a,b = DB2Query.runQuery(query)
-        print(query,a,b)
-        
-        
-        return JsonResponse({"message": "Payment updated successfully"})
-    else:
+    # ✅ 2. Precompute values once
+    remaining_amount = max(0, total_amount - paid_amount)
+    current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # ✅ 3. Run queries in sequence (minimal overhead)
+    # Update register
+    update_query = (
+        f"UPDATE register "
+        f"SET PAID_AMT = {paid_amount} "
+        f"WHERE UID = '{uid}' AND INNVOCE_NUM = '{invoice_num}'"
+    )
+
+    success, msg = DB2Query.runQuery(update_query)
+    if not success:
         return JsonResponse({"error": f"Failed to update payment: {msg}"}, status=500)
-    
+
+    # Insert into activity
+    log_desc = f"Payment updated for user {uid} to {paid_amount}"
+    insert_activity_query = (
+        "INSERT INTO activity (log_name, log_desc, log_date_time) "
+        f"VALUES ('Payment Update', '{log_desc}', '{current_timestamp}')"
+    )
+    DB2Query.runQuery(insert_activity_query)
+
+    # Insert into INVOICE_LOGS
+    insert_invoice_query = (
+        "INSERT INTO INVOICE_LOGS "
+        "(INVOICE_NUMBER, UID, LOG_DATE, AMOUNT, PAID_AMOUNT_ON_DATE, "
+        "REMAINING_AMOUNT_ON_DATE, LOG_REMARK) "
+        f"VALUES ('{invoice_num}', '{uid}', '{current_timestamp}', "
+        f"{total_amount}, {paid_amount}, {remaining_amount}, 'Payment updated')"
+    )
+    DB2Query.runQuery(insert_invoice_query)
+
+    # ✅ 4. Return response
+    return JsonResponse({"message": "Payment updated successfully"})
+
+
 def load_data(request):
-    size = request.GET.get('size', 100)
-    if not size and not str(size).isdigit():
+    try:
+        size = int(request.GET.get("size", 100))
+    except ValueError:
         return JsonResponse({"error": "Size must be a number"}, status=400)
-    size = int(size)
+
     if size <= 0 or size > 1000:
         return JsonResponse({"error": "Size must be between 1 and 1000"}, status=400)
-    query = f"""
+
+    # ✅ Step 1: Fetch invoice summaries
+    invoice_query = f"""
         SELECT 
             p.REC_NUMBER, 
             p.UID, 
@@ -156,48 +203,86 @@ def load_data(request):
             p.INNVOCE_NUM, 
             p.DATE, 
             p.AMOUNT,
-            COALESCE(r.PAID_AMT, 0) AS PAID_AMT
+            COALESCE(SUM(il.PAID_AMOUNT_ON_DATE), 0) AS PAID_AMOUNT
         FROM patient_data p
-        LEFT JOIN register r
-        ON p.UID = r.UID AND p.INNVOCE_NUM = r.INNVOCE_NUM
+        LEFT JOIN register r 
+            ON p.UID = r.UID 
+            AND p.INNVOCE_NUM = r.INNVOCE_NUM
+        LEFT JOIN INVOICE_LOGS il
+            ON p.INNVOCE_NUM = il.INVOICE_NUMBER
+        GROUP BY 
+            p.REC_NUMBER, p.UID, p.USERNAME, 
+            p.INNVOCE_NUM, p.DATE, p.AMOUNT
+        ORDER BY p.DATE DESC
         FETCH FIRST {size} ROWS ONLY
     """
-
-    success, result = DB2Query.runSelectQuery(query)
-    
+    success, invoices = DB2Query.runSelectQuery(invoice_query)
     if not success:
         return JsonResponse({"error": "Failed to load data"}, status=500)
-    
-    formatted_result = []
 
-    for row in result:
-        amount = float(row['AMOUNT'])
-        paid_amount = 0
-    
-        query = f"SELECT PAID_AMOUNT_ON_DATE FROM INVOICE_LOGS WHERE INVOICE_NUMBER = '{row['INNVOCE_NUM']}' ORDER BY LOG_DATE DESC"
-        a,b = DB2Query.runSelectQuery(query)
-        print(a,b)
-        if a and b and len(b) > 0:
-            for log in b:
-                if log['PAID_AMOUNT_ON_DATE'] is not None:
-                    paid_amount += float(log['PAID_AMOUNT_ON_DATE'])
-        
+    if not invoices:
+        return JsonResponse([], safe=False)
+
+    # ✅ Step 2: Collect all invoice numbers
+    invoice_nums = [f"'{row['INNVOCE_NUM']}'" for row in invoices]
+    invoice_num_list = ", ".join(invoice_nums)
+
+    # ✅ Step 3: Fetch *all logs* in one query (no N+1)
+    log_query = f"""
+        SELECT INVOICE_NUMBER, LOG_DATE, PAID_AMOUNT_ON_DATE, LOG_REMARK
+        FROM INVOICE_LOGS
+        WHERE INVOICE_NUMBER IN ({invoice_num_list})
+        ORDER BY LOG_DATE DESC
+    """
+    log_success, log_result = DB2Query.runSelectQuery(log_query)
+    logs_by_invoice = defaultdict(list)
+
+    if log_success and log_result:
+        for log in log_result:
+            if log.get("PAID_AMOUNT_ON_DATE") is not None:
+                logs_by_invoice[log["INVOICE_NUMBER"]].append({
+                    "date": str(log["LOG_DATE"]),
+                    "paid_amount_on_date": float(log["PAID_AMOUNT_ON_DATE"] or 0),
+                    "log_remark": log.get("LOG_REMARK"),
+                })
+
+    # ✅ Step 4: Assemble result in memory
+    formatted_result = []
+    for row in invoices:
+        amount = float(row["AMOUNT"])
+        paid_amount = float(row.get("PAID_AMOUNT", 0))
+        remaining = max(0, amount - paid_amount)
         remark = "Paid" if paid_amount >= amount else "Pending"
+        invoice_num = row["INNVOCE_NUM"]
+
+        detailed_logs = logs_by_invoice.get(invoice_num, [])
 
         formatted_result.append({
-            "recNumber": row['REC_NUMBER'],
-        "uid": row['UID'],
-        "username": row['USERNAME'],
-        "invoiceNum": row['INNVOCE_NUM'],
-        "date": str(row['DATE']),
-        "amount": amount,
-        "paidAmount": paid_amount,
-        "remainingAmount": max(0, amount - paid_amount),
-        "remark": remark,
-        "see_details" : "/invoice/"+row['INNVOCE_NUM']
+            "recNumber": row["REC_NUMBER"],
+            "uid": row["UID"],
+            "username": row["USERNAME"],
+            "invoiceNum": invoice_num,
+            "date": str(row["DATE"]),
+            "amount": amount,
+            "paidAmount": paid_amount,
+            "remainingAmount": remaining,
+            "remark": remark,
+            "detailed_logs": detailed_logs,
+            "details": {
+                "recNumber": row["REC_NUMBER"],
+                "uid": row["UID"],
+                "username": row["USERNAME"],
+                "invoiceNum": invoice_num,
+                "date": str(row["DATE"]),
+                "amount": amount,
+                "paidAmount": paid_amount,
+                "remainingAmount": remaining,
+                "remark": remark,
+            },
         })
 
     return JsonResponse(formatted_result, safe=False)
+
 
 def DASH(request):
     return render(request, 'src/DASH.html')
@@ -303,7 +388,6 @@ def VIEW_ALL(request):
 
 
 def ADD_NEW_DATA(request):
-    print(request.GET)
     if request.method == "GET":
         uid = request.GET.get("uid")
         username = request.GET.get("username")
@@ -346,60 +430,75 @@ def LOGOUT(request):
     return render(request, 'src/LOGOUT.html')
 
 def detailed_invoice_view(request, invoice_num):
-    # Fetch detailed invoice data based on invoice_num
+    if not invoice_num:
+        return JsonResponse({"error": "Invoice number is required"}, status=400)
+
     query = f"""
         SELECT 
-            p.REC_NUMBER, 
-            p.UID, 
-            p.USERNAME, 
-            p.INNVOCE_NUM, 
-            p.DATE, 
+            p.REC_NUMBER,
+            p.UID,
+            p.USERNAME,
+            p.INNVOCE_NUM,
+            p.DATE,
             p.AMOUNT,
-            COALESCE(r.PAID_AMT, 0) AS PAID_AMT
+            COALESCE(SUM(il.PAID_AMOUNT_ON_DATE), 0) AS TOTAL_PAID
         FROM patient_data p
-        LEFT JOIN register r
-        ON p.UID = r.UID AND p.INNVOCE_NUM = r.INNVOCE_NUM
+        LEFT JOIN register r 
+            ON p.UID = r.UID 
+            AND p.INNVOCE_NUM = r.INNVOCE_NUM
+        LEFT JOIN INVOICE_LOGS il
+            ON p.INNVOCE_NUM = il.INVOICE_NUMBER
         WHERE p.INNVOCE_NUM = '{invoice_num}'
+        GROUP BY 
+            p.REC_NUMBER, p.UID, p.USERNAME, 
+            p.INNVOCE_NUM, p.DATE, p.AMOUNT
         FETCH FIRST 1 ROW ONLY
     """
 
     success, result = DB2Query.runSelectQuery(query)
-    
     if not success or not result:
         return JsonResponse({"error": "Invoice not found"}, status=404)
-    
+
     row = result[0]
-    amount = float(row['AMOUNT'])
-    
-    paid_amount = 0
-    
-    query = f"SELECT * FROM INVOICE_LOGS WHERE INVOICE_NUMBER = '{invoice_num}' ORDER BY LOG_DATE DESC"
-    a,b = DB2Query.runSelectQuery(query)
+    amount = float(row["AMOUNT"])
+    paid_amount = float(row.get("TOTAL_PAID", 0))
+
+    log_query = f"""
+        SELECT LOG_DATE, PAID_AMOUNT_ON_DATE, LOG_REMARK
+        FROM INVOICE_LOGS
+        WHERE INVOICE_NUMBER = '{invoice_num}'
+        ORDER BY LOG_DATE DESC
+    """
+    log_success, log_result = DB2Query.runSelectQuery(log_query)
+
     amount_logs = []
-    if a and b and len(b) > 0:
-        for log in b:
-            if log['PAID_AMOUNT_ON_DATE'] is not None:
-                amount_logs.append({
-                    'date' : log['LOG_DATE'],
-                    'paid_amount_on_date' : float(log['PAID_AMOUNT_ON_DATE']),
-                    'log_remark' : log['LOG_REMARK']
-                })
-                paid_amount += float(log['PAID_AMOUNT_ON_DATE'])
-    
-    
+    if log_success and log_result:
+        amount_logs = [
+            {
+                "date": log["LOG_DATE"],
+                "paid_amount_on_date": float(log["PAID_AMOUNT_ON_DATE"] or 0),
+                "log_remark": log["LOG_REMARK"],
+            }
+            for log in log_result
+            if log.get("PAID_AMOUNT_ON_DATE") is not None
+        ]
+
     remark = "Paid" if paid_amount >= amount else "Pending"
 
     invoice_data = {
-        "recNumber": row['REC_NUMBER'],
-        "uid": row['UID'],
-        "username": row['USERNAME'],
-        "invoiceNum": row['INNVOCE_NUM'],
-        "date": str(row['DATE']),
+        "recNumber": row["REC_NUMBER"],
+        "uid": row["UID"],
+        "username": row["USERNAME"],
+        "invoiceNum": row["INNVOCE_NUM"],
+        "date": str(row["DATE"]),
         "amount": amount,
         "paidAmount": paid_amount,
         "remainingAmount": max(0, amount - paid_amount),
-        "detailed_logs": amount_logs,
         "remark": remark,
+        "detailed_logs": amount_logs,
     }
+
     return JsonResponse(invoice_data)
-    return render(request, 'src/INVOICE_DETAIL.html', {"invoice": invoice_data})
+
+def PRINT_INVOICE(request, invoice_num):
+    return render(request, 'src/PRINT_INVOICE.html', {"invoice_num": invoice_num})

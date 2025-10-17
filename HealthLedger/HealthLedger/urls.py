@@ -24,7 +24,7 @@ urlpatterns = [
     path('new_record/', views.CREATE, name='home'),
     path('update_record/', views.UPDATE, name='update'),
     path('view_all/', views.VIEW_ALL, name='view_all'),
-    path('invoice/<str:invoice_num>/', views.detailed_invoice_view, name='view_all'),
+    path('print/<str:invoice_num>/', views.PRINT_INVOICE, name='print_invoice'),
     path('logout/', views.LOGOUT, name='logout'),
     
     
@@ -36,7 +36,9 @@ urlpatterns = [
     path('api/recent-activity/', views.recent_activity, name='recent_activity'),
     path('api/get_stats/', views.getstats, name='get_stats'),
     path('api/add_new_data/', views.ADD_NEW_DATA, name='add_new_data'),
+    path('api/invoice/<str:invoice_num>/', views.detailed_invoice_view, name='detailed_invoice'),
     
     
     path('.well-known/appspecific/com.chrome.devtools.json', lambda r: HttpResponse('{}', content_type='application/json')),
+    path('favicon.ico', lambda r: HttpResponse('{}', content_type='application/json')),
 ]

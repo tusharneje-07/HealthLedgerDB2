@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="{% static 'output.css' %}" rel="stylesheet">
+    <title>HealthLedger | Invoice Details</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            body {
+                background: white !important;
+            }
+            .print-content {
+                box-shadow: none !important;
+                border: none !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-zinc-900 min-h-screen text-zinc-100">
+    
+    <!-- Navbar -->
+    {% comment %} <nav class="bg-zinc-800 border-b border-zinc-700 sticky top-0 z-50 no-print">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <div class="text-xl font-semibold text-zinc-100">HealthLedger</div>
+                </div>
+                <div class="hidden md:flex space-x-6">
+                    <a href="/" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">Dashboard</a>
+                    <a href="/view_all" class="text-zinc-100 hover:text-zinc-300 transition-colors duration-200 font-medium">Records</a>
+                    <a href="/logout" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">Logout</a>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                        </svg>
+                    </button>
+                    <div class="flex items-center space-x-2">
+                        <div class="w-8 h-8 bg-zinc-700 rounded-full flex items-center justify-center text-sm font-medium">TN</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav> {% endcomment %}
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        
+        <!-- Action Buttons -->
+        <div class="mb-6 flex flex-wrap gap-3 no-print fixed bg-zinc-800 p-3 rounded-lg shadow-lg top-8 right-8 z-50 text-sm">
+            {% comment %} <button onclick="window.history.back()" class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-lg transition-all duration-200 flex items-center space-x-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                <span>Back</span>
+            </button> {% endcomment %}
+            <button onclick="printInvoice()" class="px-4 py-2 bg-blue-600/50 hover:bg-blue-700/60 text-white rounded-lg transition-all duration-200 flex items-center space-x-2">
+                <svg class="w-5 h-5" fill="white" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640">
+                    <svg ><path d="M128 128C128 92.7 156.7 64 192 64L405.5 64C422.5 64 438.8 70.7 450.8 82.7L493.3 125.2C505.3 137.2 512 153.5 512 170.5L512 208L128 208L128 128zM64 320C64 284.7 92.7 256 128 256L512 256C547.3 256 576 284.7 576 320L576 416C576 433.7 561.7 448 544 448L512 448L512 512C512 547.3 483.3 576 448 576L192 576C156.7 576 128 547.3 128 512L128 448L96 448C78.3 448 64 433.7 64 416L64 320zM192 480L192 512L448 512L448 416L192 416L192 480zM520 336C520 322.7 509.3 312 496 312C482.7 312 472 322.7 472 336C472 349.3 482.7 360 496 360C509.3 360 520 349.3 520 336z"/>
+                </svg>
+                {% comment %} <span>Print</span> {% endcomment %}
+            </button>
+            <button onclick="downloadPDF()" class="px-4 py-2 bg-green-600/50 hover:bg-green-700/60 text-white rounded-lg transition-all duration-200 flex items-center space-x-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="white" stroke="currentColor" viewBox="0 0 640 640">
+                    <path d="M128 64C92.7 64 64 92.7 64 128L64 512C64 547.3 92.7 576 128 576L208 576L208 464C208 428.7 236.7 400 272 400L448 400L448 234.5C448 217.5 441.3 201.2 429.3 189.2L322.7 82.7C310.7 70.7 294.5 64 277.5 64L128 64zM389.5 240L296 240C282.7 240 272 229.3 272 216L272 122.5L389.5 240zM272 444C261 444 252 453 252 464L252 592C252 603 261 612 272 612C283 612 292 603 292 592L292 564L304 564C337.1 564 364 537.1 364 504C364 470.9 337.1 444 304 444L272 444zM304 524L292 524L292 484L304 484C315 484 324 493 324 504C324 515 315 524 304 524zM400 444C389 444 380 453 380 464L380 592C380 603 389 612 400 612L432 612C460.7 612 484 588.7 484 560L484 496C484 467.3 460.7 444 432 444L400 444zM420 572L420 484L432 484C438.6 484 444 489.4 444 496L444 560C444 566.6 438.6 572 432 572L420 572zM508 464L508 592C508 603 517 612 528 612C539 612 548 603 548 592L548 548L576 548C587 548 596 539 596 528C596 517 587 508 576 508L548 508L548 484L576 484C587 484 596 475 596 464C596 453 587 444 576 444L528 444C517 444 508 453 508 464z"/></svg>
+                </svg>
+                {% comment %} <span>Download PDF</span> {% endcomment %}
+            </button>
+            <button onclick="downloadCSV()" class="px-4 py-2 bg-purple-600/50 hover:bg-purple-700/60 text-white rounded-lg transition-all duration-200 flex items-center space-x-2">
+                <svg xmlns="http://www.w3.org/2000/svg"  class="w-5 h-5" fill="white" stroke="currentColor" viewBox="0 0 640 640"><path d="M128 64C92.7 64 64 92.7 64 128L64 512C64 547.3 92.7 576 128 576L208 576L208 464C208 428.7 236.7 400 272 400L448 400L448 234.5C448 217.5 441.3 201.2 429.3 189.2L322.7 82.7C310.7 70.7 294.5 64 277.5 64L128 64zM389.5 240L296 240C282.7 240 272 229.3 272 216L272 122.5L389.5 240zM296 444C271.7 444 252 463.7 252 488L252 568C252 592.3 271.7 612 296 612L312 612C336.3 612 356 592.3 356 568L356 560C356 549 347 540 336 540C325 540 316 549 316 560L316 568C316 570.2 314.2 572 312 572L296 572C293.8 572 292 570.2 292 568L292 488C292 485.8 293.8 484 296 484L312 484C314.2 484 316 485.8 316 488L316 496C316 507 325 516 336 516C347 516 356 507 356 496L356 488C356 463.7 336.3 444 312 444L296 444zM432 444C403.3 444 380 467.3 380 496C380 524.7 403.3 548 432 548C438.6 548 444 553.4 444 560C444 566.6 438.6 572 432 572L400 572C389 572 380 581 380 592C380 603 389 612 400 612L432 612C460.7 612 484 588.7 484 560C484 531.3 460.7 508 432 508C425.4 508 420 502.6 420 496C420 489.4 425.4 484 432 484L456 484C467 484 476 475 476 464C476 453 467 444 456 444L432 444zM528 444C517 444 508 453 508 464L508 495.6C508 531.1 518.5 565.9 538.2 595.4L543.3 603.1C547 608.7 553.3 612 559.9 612C566.5 612 572.8 608.7 576.5 603.1L581.6 595.4C601.3 565.8 611.8 531.1 611.8 495.6L611.8 464C611.8 453 602.8 444 591.8 444C580.8 444 571.8 453 571.8 464L571.8 495.6C571.8 515.2 567.7 534.5 559.8 552.3C551.9 534.5 547.8 515.2 547.8 495.6L547.8 464C547.8 453 538.8 444 527.8 444z"/></svg>
+                </svg>
+                {% comment %} <span>Download CSV</span> {% endcomment %}
+            </button>
+        </div>
+
+        <!-- Invoice Content -->
+        <div id="invoice-content" class="bg-white text-zinc-900 rounded-lg shadow-2xl overflow-hidden print-content mt-6">
+            
+            <!-- Header -->
+            <div class="p-8 border-b-2 border-zinc-300">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h1 class="text-4xl font-bold text-zinc-900 mb-2">HealthLedger</h1>
+                        <p class="text-sm text-zinc-600">Medical Records Management</p>
+                    </div>
+                    <div class="text-right">
+                        <svg id="barcode"></svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Invoice Details -->
+            <div class="p-8">
+                <div class="mb-8">
+                    <h2 class="text-2xl font-bold text-zinc-900 mb-4">Invoice Details</h2>
+                    <div class="grid grid-cols-2 gap-6">
+                        <div>
+                            <p class="text-sm text-zinc-600 mb-1">Invoice Number</p>
+                            <p class="text-lg font-semibold text-zinc-900" id="invoiceNum">-</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-zinc-600 mb-1">Date</p>
+                            <p class="text-lg font-semibold text-zinc-900" id="date">-</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-zinc-600 mb-1">Patient Name</p>
+                            <p class="text-lg font-semibold text-zinc-900" id="username">-</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-zinc-600 mb-1">UID</p>
+                            <p class="text-lg font-semibold text-zinc-900" id="uid">-</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Amount Summary -->
+                <div class="bg-zinc-100 rounded-lg p-6 mb-8">
+                    <h3 class="text-xl font-bold text-zinc-900 mb-4">Amount Summary</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-zinc-700">Total Amount</span>
+                            <span class="text-xl font-bold text-zinc-900" id="amount">₹0.00</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-zinc-700">Paid Amount</span>
+                            <span class="text-xl font-bold text-black" id="paidAmount">₹0.00</span>
+                        </div>
+                        <div class="border-t-2 border-zinc-300 pt-3 flex justify-between items-center">
+                            <span class="text-zinc-700 font-semibold">Remaining Amount</span>
+                            <span class="text-2xl font-bold text-black" id="remainingAmount">₹0.00</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-zinc-700">Status</span>
+                            <span class="px-3 py-1 rounded-full text-sm font-semibold" id="remark">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payment Installments -->
+                <div class="mb-8">
+                    <h3 class="text-xl font-bold text-zinc-900 mb-4">Payment Installments</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="bg-zinc-200">
+                                    <th class="px-4 py-3 text-left text-sm font-semibold text-zinc-900">#</th>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold text-zinc-900">Date & Time</th>
+                                    <th class="px-4 py-3 text-right text-sm font-semibold text-zinc-900">Amount Paid</th>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold text-zinc-900">Remark</th>
+                                </tr>
+                            </thead>
+                            <tbody id="installments-body">
+                                <!-- Installments will be inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Footer with QR Code -->
+                <div class="border-t-2 border-zinc-300 pt-6">
+                    <div class="flex justify-between items-end">
+                        <div>
+                            <div id="qrcode" class="inline-block"></div>
+                            <p class="text-xs text-zinc-600 mt-2">Scan for invoice verification</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-sm text-zinc-600">Thank you for your business!</p>
+                            <p class="text-xs text-zinc-500 mt-2">Generated on: <span id="generatedDate"></span></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading" class="text-center py-12">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-zinc-100"></div>
+            <p class="mt-4 text-zinc-400">Loading invoice details...</p>
+        </div>
+
+        <!-- Error State -->
+        <div id="error" class="hidden bg-red-900/20 border border-red-700 rounded-lg p-6 text-center">
+            <svg class="w-12 h-12 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <p class="text-red-400 text-lg font-semibold mb-2">Failed to load invoice</p>
+            <p class="text-zinc-400" id="error-message"></p>
+        </div>
+    </div>
+
+    <script>
+        let invoiceData = null;
+
+        // Get invoice number from URL
+        function getInvoiceNumber() {
+            const path = window.location.pathname;
+            const match = path.match(/\/invoice\/([^\/]+)/);
+            return match ? match[1] : 'INV00000084';
+        }
+
+        // Fetch invoice data
+        async function fetchInvoiceData() {
+            const invoiceNum = getInvoiceNumber();
+            try {
+                const response = await fetch(`/api/invoice/${invoiceNum}/`);
+                if (!response.ok) throw new Error('Invoice not found');
+                
+                invoiceData = await response.json();
+                displayInvoiceData();
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('invoice-content').style.display = 'block';
+            } catch (error) {
+                console.error('Error fetching invoice:', error);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').classList.remove('hidden');
+                document.getElementById('error-message').textContent = error.message;
+            }
+        }
+
+        // Display invoice data
+        function displayInvoiceData() {
+            if (!invoiceData) return;
+
+            document.getElementById('invoiceNum').textContent = invoiceData.invoiceNum;
+            document.getElementById('date').textContent = formatDate(invoiceData.date);
+            document.getElementById('username').textContent = invoiceData.username;
+            document.getElementById('uid').textContent = invoiceData.uid;
+            document.getElementById('amount').textContent = `₹${invoiceData.amount.toFixed(2)}`;
+            document.getElementById('paidAmount').textContent = `₹${invoiceData.paidAmount.toFixed(2)}`;
+            document.getElementById('remainingAmount').textContent = `₹${invoiceData.remainingAmount.toFixed(2)}`;
+            
+            const remarkEl = document.getElementById('remark');
+            remarkEl.textContent = invoiceData.remark;
+            if (invoiceData.remark === 'Paid') {
+                remarkEl.className = 'px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-800';
+            } else {
+                remarkEl.className = 'px-3 py-1 rounded-full text-sm font-semibold bg-yellow-100 text-yellow-800';
+            }
+
+            document.getElementById('generatedDate').textContent = new Date().toLocaleString();
+
+            // Generate barcode
+            JsBarcode("#barcode", invoiceData.invoiceNum, {
+                format: "CODE128",
+                width: 2,
+                height: 50,
+                displayValue: true
+            });
+
+            // Generate QR code
+            document.getElementById('qrcode').innerHTML = '';
+            new QRCode(document.getElementById("qrcode"), {
+                text: invoiceData.invoiceNum,
+                width: 128,
+                height: 128
+            });
+
+            // Display installments
+            const installmentsBody = document.getElementById('installments-body');
+            installmentsBody.innerHTML = '';
+            
+            if (invoiceData.detailed_logs && invoiceData.detailed_logs.length > 0) {
+                invoiceData.detailed_logs.forEach((log, index) => {
+                    const row = document.createElement('tr');
+                    row.className = index % 2 === 0 ? 'bg-white' : 'bg-zinc-50';
+                    row.innerHTML = `
+                        <td class="px-4 py-3 text-sm text-zinc-900">${index + 1}</td>
+                        <td class="px-4 py-3 text-sm text-zinc-900">${formatDateTime(log.date)}</td>
+                        <td class="px-4 py-3 text-sm text-zinc-900 text-right font-semibold">₹${log.paid_amount_on_date.toFixed(2)}</td>
+                        <td class="px-4 py-3 text-sm text-zinc-600">${log.log_remark}</td>
+                    `;
+                    installmentsBody.appendChild(row);
+                });
+            } else {
+                installmentsBody.innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-zinc-500">No payment installments recorded</td></tr>';
+            }
+        }
+
+        // Format date
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
+        }
+
+        // Format date time
+        function formatDateTime(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleString('en-IN', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        // Print invoice
+        function printInvoice() {
+            window.print();
+        }
+
+        // Download PDF
+        async function downloadPDF() {
+            const element = document.getElementById('invoice-content');
+            
+            try {
+                const canvas = await html2canvas(element, {
+                    scale: 2,
+                    backgroundColor: '#ffffff'
+                });
+                
+                const imgData = canvas.toDataURL('image/png');
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                
+                const imgWidth = 210;
+                const pageHeight = 297;
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                let heightLeft = imgHeight;
+                let position = 0;
+
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+
+                while (heightLeft >= 0) {
+                    position = heightLeft - imgHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+
+                pdf.save(`${invoiceData.invoiceNum}.pdf`);
+            } catch (error) {
+                console.error('Error generating PDF:', error);
+                alert('Failed to generate PDF. Please try again.');
+            }
+        }
+
+        // Download CSV
+        function downloadCSV() {
+            if (!invoiceData) return;
+
+            let csv = 'Invoice Details\n';
+            csv += `Invoice Number,${invoiceData.invoiceNum}\n`;
+            csv += `Date,${invoiceData.date}\n`;
+            csv += `Patient Name,${invoiceData.username}\n`;
+            csv += `UID,${invoiceData.uid}\n`;
+            csv += `Total Amount,${invoiceData.amount}\n`;
+            csv += `Paid Amount,${invoiceData.paidAmount}\n`;
+            csv += `Remaining Amount,${invoiceData.remainingAmount}\n`;
+            csv += `Status,${invoiceData.remark}\n\n`;
+            
+            csv += 'Payment Installments\n';
+            csv += 'No.,Date & Time,Amount Paid,Remark\n';
+            
+            if (invoiceData.detailed_logs) {
+                invoiceData.detailed_logs.forEach((log, index) => {
+                    csv += `${index + 1},"${log.date}",${log.paid_amount_on_date},"${log.log_remark}"\n`;
+                });
+            }
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${invoiceData.invoiceNum}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('invoice-content').style.display = 'none';
+            fetchInvoiceData();
+        });
+    </script>
+</body>
+</html>
