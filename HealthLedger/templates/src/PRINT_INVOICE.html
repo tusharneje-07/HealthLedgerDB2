@@ -196,6 +196,8 @@
             <p class="text-red-400 text-lg font-semibold mb-2">Failed to load invoice</p>
             <p class="text-zinc-400" id="error-message"></p>
         </div>
+
+        <input type="text" hidden id="invoice_number_load" value="{{invoice_num}}">
     </div>
 
     <script>
@@ -210,7 +212,7 @@
 
         // Fetch invoice data
         async function fetchInvoiceData() {
-            const invoiceNum = getInvoiceNumber();
+            const invoiceNum = document.getElementById('invoice_number_load').value;
             try {
                 const response = await fetch(`/api/invoice/${invoiceNum}/`);
                 if (!response.ok) throw new Error('Invoice not found');

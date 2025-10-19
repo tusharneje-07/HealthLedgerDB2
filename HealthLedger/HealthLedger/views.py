@@ -1,8 +1,11 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from .DB2 import DB2Query
 from datetime import datetime
 from collections import defaultdict
+from django.utils import timezone
+import hashlib
+from django.contrib.sessions.models import Session
 
 def CREATE(request):
     return render(request, 'src/CREATE.html')
@@ -164,7 +167,7 @@ def update_payment(request):
         return JsonResponse({"error": f"Failed to update payment: {msg}"}, status=500)
 
     # Insert into activity
-    log_desc = f"Payment updated for user {uid} to {paid_amount}"
+    log_desc = f"Payment update for {invoice_num}, ₹{paid_amount}/- Paid."
     insert_activity_query = (
         "INSERT INTO activity (log_name, log_desc, log_date_time) "
         f"VALUES ('Payment Update', '{log_desc}', '{current_timestamp}')"
@@ -186,15 +189,67 @@ def update_payment(request):
 
 
 def load_data(request):
+    # support pagination (offset) and text search
     try:
-        size = int(request.GET.get("size", 100))
+        size = int(request.GET.get("size", 50))
+        offset = int(request.GET.get("offset", 0))
     except ValueError:
-        return JsonResponse({"error": "Size must be a number"}, status=400)
+        return JsonResponse({"error": "size and offset must be numbers"}, status=400)
 
-    if size <= 0 or size > 1000:
-        return JsonResponse({"error": "Size must be between 1 and 1000"}, status=400)
+    search = (request.GET.get('search') or '').strip()
+    # optional date/status filters
+    date_from = (request.GET.get('date_from') or '').strip()
+    date_to = (request.GET.get('date_to') or '').strip()
+    status = (request.GET.get('status') or '').strip().lower()  # expected: 'paid' or 'pending' or ''
 
-    # ✅ Step 1: Fetch invoice summaries
+    if size <= 0 or size > 1000 or offset < 0:
+        return JsonResponse({"error": "Invalid size/offset"}, status=400)
+
+    # Build optional WHERE clause for a basic text search (UID, USERNAME, INNVOCE_NUM)
+    where_clause = ""
+    wheres = []
+    if search:
+        s = search.replace("'", "''")
+        wheres.append(
+            f"(LOWER(p.USERNAME) LIKE LOWER('%{s}%') "
+            f"OR LOWER(p.UID) LIKE LOWER('%{s}%') "
+            f"OR LOWER(p.INNVOCE_NUM) LIKE LOWER('%{s}%'))"
+        )
+    # date filters assume DATE column is comparable using string ISO or DB2 compatible format
+    if date_from:
+        df = date_from.replace("'", "''")
+        wheres.append(f"p.DATE >= '{df}'")
+    if date_to:
+        dt = date_to.replace("'", "''")
+        wheres.append(f"p.DATE <= '{dt}'")
+
+    where_clause = ''
+    if wheres:
+        where_clause = 'WHERE ' + ' AND '.join(wheres)
+
+    # Compute total matching invoices for progress UI / pagination info
+    # We'll count distinct invoice numbers that match the same where_clause
+    total_count = None
+    try:
+        count_query = f"""
+            SELECT COUNT(*) AS TOTAL
+            FROM (
+                SELECT p.INNVOCE_NUM
+                FROM patient_data p
+                {where_clause}
+                GROUP BY p.INNVOCE_NUM
+            ) AS SUB
+        """
+        okc, rc = DB2Query.runSelectQuery(count_query)
+        if okc and rc and len(rc) > 0:
+            # DB2 may return keys in uppercase
+            total_count = int(rc[0].get('TOTAL') or rc[0].get('total') or 0)
+        else:
+            total_count = 0
+    except Exception:
+        total_count = None
+
+    # ✅ Step 1: Fetch invoice summaries (paginated)
     invoice_query = f"""
         SELECT 
             p.REC_NUMBER, 
@@ -210,10 +265,12 @@ def load_data(request):
             AND p.INNVOCE_NUM = r.INNVOCE_NUM
         LEFT JOIN INVOICE_LOGS il
             ON p.INNVOCE_NUM = il.INVOICE_NUMBER
+        {where_clause}
         GROUP BY 
             p.REC_NUMBER, p.UID, p.USERNAME, 
             p.INNVOCE_NUM, p.DATE, p.AMOUNT
         ORDER BY p.DATE DESC
+        OFFSET {offset} ROWS
         FETCH FIRST {size} ROWS ONLY
     """
     success, invoices = DB2Query.runSelectQuery(invoice_query)
@@ -221,7 +278,11 @@ def load_data(request):
         return JsonResponse({"error": "Failed to load data"}, status=500)
 
     if not invoices:
-        return JsonResponse([], safe=False)
+        # Return empty list and include X-Total-Count header when possible
+        resp = JsonResponse([], safe=False)
+        if total_count is not None:
+            resp['X-Total-Count'] = str(total_count)
+        return resp
 
     # ✅ Step 2: Collect all invoice numbers
     invoice_nums = [f"'{row['INNVOCE_NUM']}'" for row in invoices]
@@ -280,13 +341,30 @@ def load_data(request):
                 "remark": remark,
             },
         })
+    # If a status filter was provided on the request, filter the formatted_result server-side
+    if status in ('paid', 'pending'):
+        if status == 'paid':
+            filtered = [r for r in formatted_result if r.get('remark') == 'Paid']
+        else:
+            filtered = [r for r in formatted_result if r.get('remark') != 'Paid']
+        formatted_result = filtered
 
-    return JsonResponse(formatted_result, safe=False)
+    # Attach total count header so the client can show progress
+    resp = JsonResponse(formatted_result, safe=False)
+    if total_count is not None:
+        resp['X-Total-Count'] = str(total_count)
+    
+    import time
+    time.sleep(0.5)  # simulate network/database delay for testing
+    return resp
 
 
 def DASH(request):
-    return render(request, 'src/DASH.html')
-
+    auth_token = request.COOKIES.get('auth_token')
+    if auth_token and request.session.get(f'{auth_token}_is_authenticated'):
+        return render(request, 'src/DASH.html')
+    else:
+        return redirect('/login')
 
 def recent_activity(request):
     if request.method == "GET":
@@ -307,83 +385,188 @@ def recent_activity(request):
             return JsonResponse({"error": result}, status=500)
         
 def getstats(request):
-    # Query to get all necessary fields from patient_data and register
+    # keep request usage to avoid linter warnings
+    _ = request.GET.get('dummy')
+
+    # Use invoice-level aggregation from INVOICE_LOGS to compute paid amounts,
+    # then compute pending/paid customer counts per invoice to avoid relying on register.PAID_AMT.
     query = """
-        SELECT 
-            p.REC_NUMBER,
-            p.AMOUNT,
-            COALESCE(r.PAID_AMT, 0) AS PAID_AMT
+        SELECT
+            COUNT(*) AS TOTAL_RECORDS,
+            COALESCE(SUM(p.AMOUNT), 0) AS TOTAL_REVENUE,
+            COALESCE(SUM(
+                CASE
+                    WHEN COALESCE(il.TOTAL_PAID, 0) >= p.AMOUNT THEN 0
+                    ELSE p.AMOUNT - COALESCE(il.TOTAL_PAID, 0)
+                END
+            ), 0) AS TOTAL_PENDING_AMOUNT,
+            COALESCE(SUM(
+                CASE
+                    WHEN COALESCE(il.TOTAL_PAID, 0) >= p.AMOUNT THEN 1
+                    ELSE 0
+                END
+            ), 0) AS TOTAL_PAID_CUSTOMERS
         FROM patient_data p
-        LEFT JOIN register r
-        ON p.UID = r.UID AND p.INNVOCE_NUM = r.INNVOCE_NUM
+        LEFT JOIN (
+            SELECT INVOICE_NUMBER, COALESCE(SUM(PAID_AMOUNT_ON_DATE), 0) AS TOTAL_PAID
+            FROM INVOICE_LOGS
+            GROUP BY INVOICE_NUMBER
+        ) il
+        ON p.INNVOCE_NUM = il.INVOICE_NUMBER
     """
 
     success, result = DB2Query.runSelectQuery(query)
-    
-    if not success:
+    if not success or not result:
         return JsonResponse({"error": "Failed to fetch stats"}, status=500)
 
-    total_records = len(result)
-    total_revenue = 0.0
-    total_pending_amount = 0.0
-    total_paid_customers = 0
-
-    for row in result:
-        amount = float(row['AMOUNT'])
-        paid_amount = float(row['PAID_AMT'])
-        total_revenue += amount
-        if paid_amount >= amount:
-            total_paid_customers += 1
-        else:
-            total_pending_amount += (amount - paid_amount)
+    row = result[0]
+    total_records = int(row.get("TOTAL_RECORDS") or 0)
+    total_revenue = float(row.get("TOTAL_REVENUE") or 0.0)
+    total_pending_amount = float(row.get("TOTAL_PENDING_AMOUNT") or 0.0)
+    total_paid_customers = int(row.get("TOTAL_PAID_CUSTOMERS") or 0)
 
     stats = {
         "total_records": total_records,
         "total_revenue": total_revenue,
         "total_pending_amount": total_pending_amount,
-        "total_paid_customers": total_paid_customers
+        "total_paid_customers": total_paid_customers,
     }
 
     return JsonResponse(stats)
 
 
+def records_count(request):
+    """Return the total number of records matching current filters.
+       This endpoint returns JSON: { total: N }
+    """
+    search = (request.GET.get('search') or '').strip()
+    date_from = (request.GET.get('date_from') or '').strip()
+    date_to = (request.GET.get('date_to') or '').strip()
+    status = (request.GET.get('status') or '').strip().lower()
+
+    wheres = []
+    if search:
+        s = search.replace("'", "''")
+        wheres.append(
+            f"(LOWER(p.USERNAME) LIKE LOWER('%{s}%') OR LOWER(p.UID) LIKE LOWER('%{s}%') OR LOWER(p.INNVOCE_NUM) LIKE LOWER('%{s}%'))"
+        )
+    if date_from:
+        df = date_from.replace("'", "''")
+        wheres.append(f"p.DATE >= '{df}'")
+    if date_to:
+        dt = date_to.replace("'", "''")
+        wheres.append(f"p.DATE <= '{dt}'")
+
+    where_clause = ''
+    if wheres:
+        where_clause = 'WHERE ' + ' AND '.join(wheres)
+
+    try:
+        count_query = f"""
+            SELECT COUNT(*) AS TOTAL
+            FROM (
+                SELECT p.INNVOCE_NUM
+                FROM patient_data p
+                {where_clause}
+                GROUP BY p.INNVOCE_NUM
+            ) AS SUB
+        """
+        ok, res = DB2Query.runSelectQuery(count_query)
+        if ok and res:
+            total = int(res[0].get('TOTAL') or res[0].get('total') or 0)
+            return JsonResponse({'total': total})
+        return JsonResponse({'total': 0})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
 def VIEW_ALL(request):
-    query = """
-        SELECT 
-            p.REC_NUMBER, 
-            p.UID, 
-            p.USERNAME, 
-            p.INNVOCE_NUM, 
-            p.DATE, 
+    # Prefer the summed INVOICE_LOGS total as the source of truth for paid amount.
+    # Fall back to register.PAID_AMT only when no logs exist for the invoice.
+    query = f"""
+        SELECT
+            p.REC_NUMBER,
+            p.UID,
+            p.USERNAME,
+            p.INNVOCE_NUM,
+            p.DATE,
             p.AMOUNT,
-            COALESCE(r.PAID_AMT, 0) AS PAID_AMT
+            CASE
+                WHEN COALESCE(il.TOTAL_PAID, 0) > 0 THEN il.TOTAL_PAID
+                ELSE COALESCE(r.PAID_AMT, 0)
+            END AS PAID_AMOUNT
         FROM patient_data p
         LEFT JOIN register r
-        ON p.UID = r.UID AND p.INNVOCE_NUM = r.INNVOCE_NUM
+            ON p.UID = r.UID
+            AND p.INNVOCE_NUM = r.INNVOCE_NUM
+        LEFT JOIN (
+            SELECT INVOICE_NUMBER, COALESCE(SUM(PAID_AMOUNT_ON_DATE), 0) AS TOTAL_PAID
+            FROM INVOICE_LOGS
+            GROUP BY INVOICE_NUMBER
+        ) il
+            ON p.INNVOCE_NUM = il.INVOICE_NUMBER
+        ORDER BY p.DATE DESC
     """
 
-    success, result = DB2Query.runSelectQuery(query)
-    
+    success, invoices = DB2Query.runSelectQuery(query)
+
     if not success:
         return JsonResponse({"error": "Failed to load data"}, status=500)
-    
+
+    if not invoices:
+        return render(request, 'src/VIEW_ALL.html', {"records": []})
+
+    # Collect invoice numbers for a single logs query
+    invoice_nums = [f"'{row['INNVOCE_NUM']}'" for row in invoices if row.get('INNVOCE_NUM') is not None]
     formatted_result = []
 
-    for row in result:
-        amount = float(row['AMOUNT'])
-        paid_amount = float(row['PAID_AMT']) if row['PAID_AMT'] is not None else 0.0
+    logs_by_invoice = defaultdict(list)
+    if invoice_nums:
+        invoice_num_list = ", ".join(invoice_nums)
+        log_query = f"""
+            SELECT INVOICE_NUMBER, LOG_DATE, PAID_AMOUNT_ON_DATE, LOG_REMARK
+            FROM INVOICE_LOGS
+            WHERE INVOICE_NUMBER IN ({invoice_num_list})
+            ORDER BY LOG_DATE DESC
+        """
+        log_success, log_result = DB2Query.runSelectQuery(log_query)
+        if log_success and log_result:
+            for log in log_result:
+                if log.get("PAID_AMOUNT_ON_DATE") is not None:
+                    logs_by_invoice[log["INVOICE_NUMBER"]].append({
+                        "date": str(log["LOG_DATE"]),
+                        "paid_amount_on_date": float(log["PAID_AMOUNT_ON_DATE"] or 0),
+                        "log_remark": log.get("LOG_REMARK"),
+                    })
+
+    # Assemble formatted result, prefer the sum of logs (if present) for paid_amount
+    for row in invoices:
+        amount = float(row.get("AMOUNT") or 0)
+        invoice_num = row.get("INNVOCE_NUM")
+        # Sum logs for this invoice if any exist
+        detailed_logs = logs_by_invoice.get(invoice_num, [])
+        sum_from_logs = sum(l.get("paid_amount_on_date", 0.0) for l in detailed_logs)
+
+        # Use logs sum if it exists (>0), otherwise use the PAID_AMOUNT from the main query
+        paid_amount = float(sum_from_logs) if sum_from_logs > 0 else float(row.get("PAID_AMOUNT") or 0.0)
+
+        remaining = max(0, amount - paid_amount)
         remark = "Paid" if paid_amount >= amount else "Pending"
 
         formatted_result.append({
-            "recNumber": row['REC_NUMBER'],
-            "uid": row['UID'],
-            "username": row['USERNAME'],
-            "invoiceNum": row['INNVOCE_NUM'],
-            "date": str(row['DATE']),
+            "recNumber": row.get("REC_NUMBER"),
+            "uid": row.get("UID"),
+            "username": row.get("USERNAME"),
+            "invoiceNum": invoice_num,
+            "date": str(row.get("DATE")),
             "amount": amount,
             "paidAmount": paid_amount,
+            "remainingAmount": remaining,
             "remark": remark,
+            "detailed_logs": detailed_logs,
+            "see_details": "/print/" + (invoice_num or ""),
         })
+
     return render(request, 'src/VIEW_ALL.html', {"records": formatted_result})
 
 
@@ -427,6 +610,10 @@ def ADD_NEW_DATA(request):
         return JsonResponse({"error": "Invalid request method"}, status=405)
     
 def LOGOUT(request):
+    auth_token = request.COOKIES.get('auth_token')
+    if auth_token and request.session.get(f'{auth_token}_is_authenticated'):
+        request.session[f'{auth_token}_is_authenticated'] = False
+        
     return render(request, 'src/LOGOUT.html')
 
 def detailed_invoice_view(request, invoice_num):
@@ -502,3 +689,284 @@ def detailed_invoice_view(request, invoice_num):
 
 def PRINT_INVOICE(request, invoice_num):
     return render(request, 'src/PRINT_INVOICE.html', {"invoice_num": invoice_num})
+
+def LOGIN(request):
+    # Support both GET (render) and POST (form-based login)
+    if request.method == 'GET':
+        return render(request, 'src/LOGIN.html')
+
+    username = request.POST.get('username') or request.POST.get('email')
+    password = request.POST.get('password')
+    user_type = request.POST.get('user_type') or 'S'  # Default to 'S' for staff
+    
+    # Key Based Login
+    if request.method == 'POST' and request.POST.get('has_token_key'):
+        auth_token = request.COOKIES.get('auth_token')
+        has_token_key = request.POST.get('has_token_key')
+        key = request.session.get(has_token_key)
+        if key and auth_token == key:
+            request.session[f'{auth_token}_is_authenticated'] = True
+            return redirect('/')
+        
+
+    query = f"SELECT UID, NAME, EMAIL, PASSWORD, FLAG FROM AUTHENTICATION WHERE (UID = '{username}' OR EMAIL = '{username}') AND FLAG = '{user_type[0].upper()}'"
+    ok, res = DB2Query.runSelectQuery(query)
+    if ok and res:
+        user = res[0]
+        stored_password = user.get('PASSWORD')
+        if stored_password == password:
+            try:
+                email = (user.get('EMAIL') or user.get('UID') or '')
+                auth_token = hashlib.sha256(email.encode()).hexdigest()
+
+                # set session values now (so we can return immediately)
+                request.session[f'{auth_token}'] = auth_token
+                request.session[f'{auth_token}_user_uid'] = user.get('UID')
+                request.session[f'{auth_token}_user_name'] = user.get('NAME')
+                request.session[f'{auth_token}_user_email'] = user.get('EMAIL')
+                request.session[f'{auth_token}_user_flag'] = user.get('FLAG')
+                request.session[f'{auth_token}_is_authenticated'] = True
+
+                response = redirect('/')
+                response.set_cookie(
+                    'auth_token',
+                    auth_token,
+                    max_age=3 * 60 * 60,   # 3 hours in seconds
+                    httponly=False,
+                    secure=request.is_secure(),
+                    samesite='Lax'
+                )
+                response.set_cookie(
+                    'auth_token_name',
+                    user.get('EMAIL'),
+                    max_age=3 * 60 * 60,   # 3 hours in seconds
+                    httponly=False,
+                    secure=request.is_secure(),
+                    samesite='Lax'
+                )
+                return response
+                
+            except Exception:
+                pass
+
+
+def auth_cookie_info(request):
+    """Return JSON indicating whether auth_token cookie is present (HttpOnly) and a display name.
+       This endpoint allows client JS to detect HttpOnly cookies by having the server read them.
+    """
+    auth = request.COOKIES.get('auth_token')
+    name = None
+    # prefer server-side session name if available, else cookie 'auth_token_name'
+    if auth:
+        name = request.session.get('user_name') or request.COOKIES.get('auth_token_name')
+    return JsonResponse({'hasAuthCookie': bool(auth), 'name': name})
+
+
+
+
+# --- WebAuthn / Passkey endpoints (basic implementation) ---
+
+# def _get_user_row(username, user_type=None):
+#     """Fetch a row from AUTHENTICATION table by EMAIL or UID (username).
+#        Returns dict or None"""
+#     # try by UID first
+#     q = f"SELECT UID, NAME, EMAIL, PASSWORD, FLAG, KEY FROM AUTHENTICATION WHERE UID = '{username}'"
+#     ok, res = DB2Query.runSelectQuery(q)
+#     if ok and res:
+#         return res[0]
+#     # try by EMAIL
+#     q2 = f"SELECT UID, NAME, EMAIL, PASSWORD, FLAG, KEY FROM AUTHENTICATION WHERE EMAIL = '{username}'"
+#     ok2, res2 = DB2Query.runSelectQuery(q2)
+#     if ok2 and res2:
+#         return res2[0]
+#     return None
+
+
+# def webauthn_register_options(request):
+#     # return PublicKeyCredentialCreationOptions (minimal) with base64url strings
+#     try:
+#         payload = json.loads(request.body.decode() or '{}')
+#     except Exception:
+#         payload = {}
+#     username = payload.get('username')
+#     user_type = payload.get('user_type')
+#     if not username:
+#         return JsonResponse({'error': 'username required'}, status=400)
+
+#     # Create challenge (random 32 bytes)
+#     challenge = secrets.token_bytes(32)
+
+#     # For user.id use a random 16-byte value or the UID hashed
+#     user_row = _get_user_row(username, user_type)
+#     if user_row:
+#         user_id_raw = user_row.get('UID') or username
+#     else:
+#         # Use username as fallback
+#         user_id_raw = username
+
+#     user_id = hashlib.sha256(user_id_raw.encode()).digest()[:16]
+
+#     # Determine rp.id only for safe development domains or when explicitly configured
+#     host = request.get_host().split(':')[0]
+#     rpid = None
+#     allowed_dev_hosts = ('localhost', '127.0.0.1')
+#     env_rpid = os.environ.get('WEB_AUTHN_RPID')
+#     if host in allowed_dev_hosts:
+#         rpid = host
+#     elif env_rpid:
+#         rpid = env_rpid
+
+#     publicKey = {
+#         'challenge': base64url_encode(challenge),
+#         'rp': {'name': 'HealthLedger'},
+#         'user': {
+#             'id': base64url_encode(user_id),
+#             'name': username,
+#             'displayName': username,
+#         },
+#         'pubKeyCredParams': [{'type': 'public-key', 'alg': -7}, {'type': 'public-key', 'alg': -257}],
+#         'timeout': 60000,
+#         'attestation': 'none'
+#     }
+#     # store challenge server-side (simple ephemeral storage using session)
+#     try:
+#         # store base64url challenge string in session for later verification
+#         request.session['webauthn_challenge'] = base64url_encode(challenge)
+#         request.session['webauthn_username'] = username
+#     except Exception:
+#         pass
+
+#     # If we determined a rp.id, include it
+#     if rpid:
+#         publicKey['rp']['id'] = rpid
+#     # helpful debug info for development
+#     return JsonResponse({'publicKey': publicKey, 'serverHost': host, 'rpid': rpid})
+
+
+# def webauthn_register_complete(request):
+#     try:
+#         payload = json.loads(request.body.decode() or '{}')
+#     except Exception:
+#         payload = {}
+#     username = payload.get('username')
+#     user_type = payload.get('user_type')
+#     attestation = payload.get('attestation')
+#     if not (username and attestation):
+#         return JsonResponse({'success': False, 'error': 'username and attestation required'}, status=400)
+
+#     # Minimal validation: ensure challenge matches session
+#     session_challenge = request.session.get('webauthn_challenge')
+#     if not session_challenge:
+#         # continue but warn
+#         pass
+
+#     # Persist the attestation (store in AUTHENTICATION.KEY)
+#     # We'll store a compact JSON in KEY column
+#     att_json = json.dumps(attestation)
+
+#     # Update existing user if exists, otherwise insert
+#     user = _get_user_row(username, user_type)
+#     if user:
+#         uid = user.get('UID')
+#         upd = f"UPDATE AUTHENTICATION SET KEY = '{att_json}' WHERE UID = '{uid}'"
+#         ok, msg = DB2Query.runQuery(upd)
+#         if not ok:
+#             return JsonResponse({'success': False, 'error': 'Failed to store credential'}, status=500)
+#     else:
+#         # Insert new user stub with FLAG 'P' (passkey)
+#         uid = username if len(username) <= 25 else username[:25]
+#         ins = f"INSERT INTO AUTHENTICATION (UID, NAME, EMAIL, PASSWORD, FLAG, KEY) VALUES ('{uid}', '{username}', '{username}', '', 'P', '{att_json}')"
+#         ok, msg = DB2Query.runQuery(ins)
+#         if not ok:
+#             return JsonResponse({'success': False, 'error': 'Failed to create user record'}, status=500)
+
+#     return JsonResponse({'success': True})
+
+
+# def webauthn_authenticate_options(request):
+#     try:
+#         payload = json.loads(request.body.decode() or '{}')
+#     except Exception:
+#         payload = {}
+#     username = payload.get('username')
+#     user_type = payload.get('user_type')
+#     if not username:
+#         return JsonResponse({'error': 'username required'}, status=400)
+
+#     user = _get_user_row(username, user_type)
+#     if not user or not user.get('KEY'):
+#         return JsonResponse({'error': 'No passkey registered for this user'}, status=404)
+
+#     # Create a challenge (random 32 bytes)
+#     challenge = secrets.token_bytes(32)
+#     try:
+#         request.session['webauthn_challenge'] = base64url_encode(challenge)
+#         request.session['webauthn_username'] = username
+#     except Exception:
+#         pass
+
+#     # Build allowCredentials from stored KEY if possible
+#     try:
+#         stored = json.loads(user.get('KEY'))
+#         # stored may include id in rawId or rawId base64
+#         allow = []
+#         if stored.get('rawId'):
+#             allow.append({'type': 'public-key', 'id': base64url_encode(base64url_decode(stored.get('rawId')) )})
+#     except Exception:
+#         allow = []
+
+#     host = request.get_host().split(':')[0]
+#     env_rpid = os.environ.get('WEB_AUTHN_RPID')
+#     rpid = host if host in ('localhost', '127.0.0.1') else (env_rpid or None)
+
+#     publicKey = {
+#         'challenge': base64url_encode(challenge),
+#         'timeout': 60000,
+#         'allowCredentials': allow,
+#         'userVerification': 'preferred'
+#     }
+#     if rpid:
+#         publicKey['rpId'] = rpid
+#     # helpful debug info for development
+#     return JsonResponse({'publicKey': publicKey, 'serverHost': host, 'rpid': rpid})
+
+
+# def webauthn_authenticate_complete(request):
+#     try:
+#         payload = json.loads(request.body.decode() or '{}')
+#     except Exception:
+#         payload = {}
+#     username = payload.get('username')
+#     user_type = payload.get('user_type')
+#     assertion = payload.get('assertion')
+#     if not (username and assertion):
+#         return JsonResponse({'success': False, 'error': 'username and assertion required'}, status=400)
+
+#     # Minimal verification: check we have stored key and then accept
+#     user = _get_user_row(username, user_type)
+#     if not user or not user.get('KEY'):
+#         return JsonResponse({'success': False, 'error': 'No credential registered'}, status=404)
+
+#     # TODO: Proper WebAuthn verification is required here (signature checks, origin, rpId, challenge)
+#     # For now, accept and create a session to mark the user as logged in
+#     try:
+#         request.session['user_uid'] = user.get('UID')
+#         request.session['user_name'] = user.get('NAME')
+#     except Exception:
+#         pass
+
+#     return JsonResponse({'success': True, 'redirect': '/'})
+
+
+# def base64url_encode(b):
+#     if isinstance(b, str):
+#         b = b.encode()
+#     import base64
+#     return base64.urlsafe_b64encode(b).decode().rstrip('=')
+
+# def base64url_decode(s):
+#     import base64
+#     if isinstance(s, str):
+#         s = s
+#     pad = '=' * ((4 - len(s) % 4) % 4)
+#     return base64.urlsafe_b64decode(s + pad)

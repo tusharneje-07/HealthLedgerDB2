@@ -6,10 +6,114 @@
     <title>HealthLedger | Records</title>
     {% load static %}
     <link href="{% static 'output.css' %}" rel="stylesheet">
+    <style>
+        /* Spreadsheet-like resizer styles */
+        #recordsTable { position: relative; table-layout: fixed; }
+        #recordsTable th { position: relative; }
+        /* The resizer clickable area spans full table height and centers on the border */
+        .col-resizer {
+            position: absolute;
+            top: 0; /* will be adjusted via JS to align with header */
+            height: auto; /* set via JS to header height */
+            width: 18px; /* hit area */
+            margin-left: -9px;
+            cursor: col-resize;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            touch-action: none;
+            pointer-events: auto;
+        }
+        .col-resizer .bar {
+            width: 2px;
+            height: 40%;
+            background: rgba(255,255,255,0.95);
+            border-radius: 2px;
+            box-shadow: 0 0 6px rgba(0,0,0,0.45);
+            opacity: 0.75;
+        }
+        .col-resizer:hover .bar { background: rgba(255,255,255,1); transform: scaleX(1.05); }
+
+        /* Reduce resizer hit area on small screens to avoid obstructing content */
+        @media (max-width: 640px) {
+            .col-resizer { width: 12px; margin-left: -6px; }
+            .col-resizer .bar { width: 3px; }
+        }
+
+        /* Prevent text overlap during resize: show ellipsis instead of overlapping text */
+        #recordsTable th, #recordsTable td {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        /* Sticky filters and header inside the scroll container */
+        .controls-sticky { position: sticky; top: 0; z-index: 60; background: transparent; }
+    #filtersWrap { transition: max-height 220ms ease; overflow: hidden; }
+    /* collapsed state for filters - prefer class toggle for predictable behavior */
+    #filtersWrap.collapsed { max-height: 0 !important; }
+    #filtersWrap.expanded { max-height: 1200px; }
+    /* allow filter controls to wrap on small screens and align in row on md+ */
+    #filtersWrap .flex { flex-wrap: wrap; }
+        /* variable used to offset the sticky thead */
+        :root { --filters-height: 0px; }
+
+        /* Ensure the Show Stats button stays aligned to the right in the navbar */
+        #toggleStatsBtn { margin-left: auto; align-self: center; }
+
+        /* Progress bar styles */
+        #loadingProgressBar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 0%;
+            height: 4px;
+            background: linear-gradient(90deg, #3b82f6, #60a5fa);
+            transition: width 0.3s ease;
+            z-index: 100;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+
+        /* Percentage button at bottom right */
+        #percentageBtn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            min-width: 60px;
+            transition: all 0.3s ease;
+        }
+
+        /* Table container with fixed height and hidden scrollbars */
+        .table-container {
+            max-height: 450px;
+            overflow-y: auto;
+            overflow-x: auto;
+            position: relative;
+        }
+
+        /* Hide scrollbars for table container */
+        .table-container::-webkit-scrollbar {
+            display: none;
+        }
+        
+        .table-container {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+
+        /* Sticky header for table */
+        #recordsTable thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: #18181b;
+        }
+    </style>
 </head>
 <body class="bg-zinc-900 min-h-screen text-zinc-100">
-    
-    <!-- Navbar -->
+
+     <!-- Navbar -->
     <nav class="bg-zinc-800 border-b border-zinc-700 sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
@@ -22,9 +126,10 @@
                 
                 <!-- Navigation Links -->
                 <div class="hidden md:flex space-x-6">
-                    <a class="text-zinc-400 hover:text-zinc-300 transition-colors duration-200" onclick="window.location.href='/'" style="cursor: pointer;">Dashboard</a>
-                    <a href="#" class="text-zinc-100 hover:text-zinc-100 transition-colors duration-200 font-medium">Records</a>
-                    <a href="#" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/logout'">Logout</a>
+                    <a class="text-zinc-100 hover:text-zinc-300 transition-colors duration-200 font-medium">Dashboard</a>
+                    <a class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/view_all'" style="cursor: pointer;">Records</a>
+                    <a href="#" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/logout'">SleepOut</a>
+
                 </div>
                 
                 <!-- User Menu -->
@@ -44,135 +149,602 @@
         </div>
     </nav>
 
-    <!-- Main Content -->
-    <div class="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        <!-- Recent Records Table -->
-        <div class="mt-6 bg-zinc-800 rounded-lg shadow-2xl overflow-hidden border border-zinc-700">
-            
-            <div class="overflow-x-auto">
-                <div class="flex items-center p-4 justify-end">
-                    <input id="searchInput" type="text" placeholder="Search..." class="px-4 py-2 rounded-lg bg-zinc-700 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-64" onkeyup="filterTable()">
-                </div>
-                <table id="recordsTable" class="w-full">
-                    <thead class="bg-zinc-900/50 border-b border-zinc-700">
-                        <tr>
-                            <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(0)">Invoice &#8597;</th>
-                            <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(1)">Customer &#8597;</th>
-                            <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(2)">Date &#8597;</th>
-                            <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(3)">Amount &#8597;</th>
-                            <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(4)">Paid Amount &#8597;</th>
-                            <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(5)">Status &#8597;</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-zinc-700">
-                        {% for record in records %}
-                        <tr class="hover:bg-zinc-700/30 transition-colors duration-150">
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-zinc-100">{{ record.recNumber }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">{{ record.username }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">{{ record.date }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">₹{{ record.amount }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">₹{{ record.paidAmount }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                {% if record.remark == "Paid" %}
-                                    <span class="px-3 py-1 rounded-lg text-xs font-medium bg-green-900/40 text-green-400">{{ record.remark }}</span>
-                                {% else %}
-                                    <span class="px-3 py-1 rounded-lg text-xs font-medium bg-red-900/40 text-red-400">Pending</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                <script>
-                let sortDirections = [true, true, true, true, true, true]; // Added for Status column
+    <div class="max-w-8xl mx-auto px-12 py-3 sm:px-8 lg:px-8">
+        <div class="w-full flex flex-row justify-end">
+            <button id="toggleStatsBtn" type="button" aria-expanded="false"
+                class="inline-flex items-center gap-2 px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-100 hover:bg-zinc-700 focus:outline-none">
+                <!-- Eye (visible when stats are hidden -> button shows "Show Stats" + eye icon) -->
+                <span id="eyeIcon" class="inline-flex">
+                    <svg id="icon-eye" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-zinc-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                </span>
+                <!-- Eye-off (hidden by default) -->
+                <span id="eyeOffIcon" class="hidden">
+                    <svg id="icon-eye-off" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-zinc-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.477 0-8.268-2.943-9.542-7a10.06 10.06 0 012.223-3.607M6.1 6.1A9.965 9.965 0 0112 5c4.477 0 8.268 2.943 9.542 7a9.996 9.996 0 01-4.473 5.197M3 3l18 18" />
+                    </svg>
+                </span>
+                <span id="toggleStatsText">Show Stats</span>
+        </button>
+        </div>
+        
 
-                function filterTable() {
-                    const input = document.getElementById("searchInput").value.toLowerCase();
-                    const table = document.getElementById("recordsTable");
-                    const trs = table.getElementsByTagName("tbody")[0].getElementsByTagName("tr");
-                    for (let i = 0; i < trs.length; i++) {
-                        let show = false;
-                        const tds = trs[i].getElementsByTagName("td");
-                        for (let j = 0; j < tds.length; j++) {
-                            if (tds[j].textContent.toLowerCase().indexOf(input) > -1) {
-                                show = true;
-                                break;
-                            }
+        
+        
+        
+            <!-- Stats Grid (hidden by default, toggled by button) -->
+        
+        <div id="statsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 mb-2 mt-2">
+            
+            <!-- Stat Card 1 -->
+            <div class="bg-zinc-800 rounded-lg p-6 border border-zinc-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-zinc-400">Total Records</p>
+                        <p class="text-3xl font-semibold text-zinc-100 mt-2" id="total_records">----</p>
+                        <p class="text-xs text-green-400 mt-2">+12% from last month</p>
+                    </div>
+                    <div class="w-12 h-12 bg-zinc-700 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stat Card 2 -->
+            <div class="bg-zinc-800 rounded-lg p-6 border border-zinc-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-zinc-400">Total Revenue</p>
+                        <p class="text-3xl font-semibold text-zinc-100 mt-2" id="total_revenue">----</p>
+                        <p class="text-xs text-green-400 mt-2">+8% from last month</p>
+                    </div>
+                    <div class="w-12 h-12 bg-zinc-700 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stat Card 3 -->
+            <div class="bg-zinc-800 rounded-lg p-6 border border-zinc-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-zinc-400">Total Pending Amount</p>
+                        <p class="text-3xl font-semibold text-zinc-100 mt-2" id="total_pending_amount">----</p>
+                        <p class="text-xs text-yellow-400 mt-2">Requires attention</p>
+                    </div>
+                    <div class="w-12 h-12 bg-zinc-700 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stat Card 4 -->
+            <div class="bg-zinc-800 rounded-lg p-6 border border-zinc-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-zinc-400">Completed</p>
+                        <p class="text-3xl font-semibold text-zinc-100 mt-2" id="total_paid_customers">----</p>
+                        <p class="text-xs text-green-400 mt-2" id="completion_rate">88.6% completion rate</p>
+                    </div>
+                    <div class="w-12 h-12 bg-zinc-700 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            (function(){
+                const btn = document.getElementById('toggleStatsBtn');
+                const grid = document.getElementById('statsGrid');
+                const text = document.getElementById('toggleStatsText');
+                const eyeIcon = document.getElementById('eyeIcon');
+                const eyeOffIcon = document.getElementById('eyeOffIcon');
+                // initialize from localStorage if desired
+                const stored = localStorage.getItem('healthledger_show_stats');
+                const show = stored ? stored === '1' : false; // default hidden -> button shows "Show Stats"
+                function applyState(visible){
+                        if(visible){
+                            if(grid) grid.classList.remove('hidden');
+                            if(text) text.textContent = 'Hide Stats';
+                            if(eyeIcon) eyeIcon.classList.add('hidden');
+                            if(eyeOffIcon) eyeOffIcon.classList.remove('hidden');
+                            if(btn) btn.setAttribute('aria-expanded','true');
+                            localStorage.setItem('healthledger_show_stats','1');
+                        } else {
+                            if(grid) grid.classList.add('hidden');
+                            if(text) text.textContent = 'Show Stats';
+                            if(eyeIcon) eyeIcon.classList.remove('hidden');
+                            if(eyeOffIcon) eyeOffIcon.classList.add('hidden');
+                            if(btn) btn.setAttribute('aria-expanded','false');
+                            localStorage.setItem('healthledger_show_stats','0');
                         }
-                        trs[i].style.display = show ? "" : "none";
+                }
+                applyState(show);
+                btn.addEventListener('click', function(){ applyState(grid.classList.contains('hidden')); });
+            })();
+        </script>
+
+        <!-- Column resize script: spreadsheet-style resizers that resize adjacent columns and persist widths -->
+        <script>
+            document.addEventListener('DOMContentLoaded', function(){
+            (function tryInit(){
+                const table = document.getElementById('recordsTable');
+                if(!table){
+                    // try again after short delay in case other scripts render the table
+                    setTimeout(tryInit, 200);
+                    return;
+                }
+
+                const container = table.closest('.overflow-x-auto') || table.parentElement;
+                if(container && getComputedStyle(container).position === 'static') container.style.position = 'relative';
+
+                const thead = table.querySelector('thead');
+                if(!thead) return;
+                const headerRow = thead.querySelector('tr');
+                if(!headerRow) return;
+
+                const STORAGE_KEY = 'healthledger_col_widths_v1';
+                const minWidth = 40; // px
+
+                function ensureColgroup(){
+                    let colgroup = table.querySelector('colgroup');
+                    const colsNeeded = headerRow.cells.length;
+                    if(!colgroup){
+                        colgroup = document.createElement('colgroup');
+                        for(let i=0;i<colsNeeded;i++) colgroup.appendChild(document.createElement('col'));
+                        table.insertBefore(colgroup, table.firstChild);
+                    } else if(colgroup.children.length < colsNeeded){
+                        for(let i=colgroup.children.length;i<colsNeeded;i++) colgroup.appendChild(document.createElement('col'));
+                    }
+                    return colgroup;
+                }
+
+                const colgroup = ensureColgroup();
+
+                // Debug visual badge to confirm script initialization in the served page
+                try{ console.log('col-resize: init'); }catch(e){ console.warn('col-resize: init failed', e); }
+
+                let widths = {};
+                try{ widths = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }catch(e){ widths = {}; }
+
+                function clearResizers(){
+                    // keep resizers attached to headerRow so they only occupy header area
+                    (headerRow._colResizers || []).forEach(r => r.remove());
+                    headerRow._colResizers = [];
+                }
+
+                function createResizers(){
+                    clearResizers();
+                    const cols = Array.from(colgroup.children);
+                    const colCount = cols.length;
+
+                    // ensure initial widths (use stored or measured)
+                    for(let i=0;i<colCount;i++){
+                        const col = cols[i];
+                        if(widths[i]) col.style.width = widths[i] + 'px';
+                        else {
+                            const th = headerRow.cells[i];
+                            const measured = th ? th.getBoundingClientRect().width : col.getBoundingClientRect().width;
+                            if(measured && measured > 0) col.style.width = Math.max(minWidth, Math.round(measured)) + 'px';
+                        }
+                    }
+
+                    // ensure headerRow is positioned for absolute children
+                    if(getComputedStyle(headerRow).position === 'static') headerRow.style.position = 'relative';
+
+                    headerRow._colResizers = headerRow._colResizers || [];
+
+                    for(let i=0;i<colCount-1;i++){
+                        const resizer = document.createElement('div');
+                        resizer.className = 'col-resizer';
+                        resizer.dataset.leftIndex = i;
+                        const bar = document.createElement('div');
+                        bar.className = 'bar';
+                        resizer.appendChild(bar);
+
+                        // attach pointer handlers
+                        resizer.addEventListener('mousedown', onPointerDown);
+                        resizer.addEventListener('touchstart', function(e){ if(e.touches && e.touches[0]) onPointerDown(e.touches[0]); e.preventDefault(); }, {passive:false});
+
+                        headerRow.appendChild(resizer);
+                        headerRow._colResizers.push(resizer);
+                    }
+
+                    // initial placement
+                    positionResizers();
+                }
+
+                let dragging = null;
+
+                function onPointerDown(e){
+                    const target = e.target.closest('.col-resizer');
+                    if(!target) return;
+                    const leftIndex = parseInt(target.dataset.leftIndex, 10);
+                    const cols = Array.from(colgroup.children);
+                    const leftCol = cols[leftIndex];
+                    const rightCol = cols[leftIndex+1];
+                    if(!leftCol || !rightCol) return;
+
+                    dragging = {
+                        leftIndex,
+                        startX: e.clientX,
+                        leftStart: Math.round(leftCol.getBoundingClientRect().width),
+                        rightStart: Math.round(rightCol.getBoundingClientRect().width)
+                    };
+
+                    document.documentElement.style.cursor = 'col-resize';
+                    document.addEventListener('mousemove', onPointerMove);
+                    document.addEventListener('mouseup', onPointerUp);
+                    document.addEventListener('touchmove', onTouchMove, {passive:false});
+                    document.addEventListener('touchend', onPointerUp);
+                }
+
+                function onTouchMove(e){ if(e.touches && e.touches[0]) onPointerMove(e.touches[0]); }
+
+                function onPointerMove(e){
+                    if(!dragging) return;
+                    const dx = e.clientX - dragging.startX;
+                    const cols = Array.from(colgroup.children);
+                    const leftCol = cols[dragging.leftIndex];
+                    const rightCol = cols[dragging.leftIndex+1];
+                    if(!leftCol || !rightCol) return;
+
+                    let newLeft = Math.max(minWidth, Math.round(dragging.leftStart + dx));
+                    let newRight = Math.max(minWidth, Math.round(dragging.rightStart - dx));
+
+                    if(newRight < minWidth){
+                        const deficit = minWidth - newRight;
+                        newRight = minWidth;
+                        newLeft = Math.max(minWidth, newLeft - deficit);
+                    }
+
+                    leftCol.style.width = newLeft + 'px';
+                    rightCol.style.width = newRight + 'px';
+
+                    widths[dragging.leftIndex] = newLeft;
+                    widths[dragging.leftIndex+1] = newRight;
+
+                    positionResizers();
+
+                    if(e.cancelable) e.preventDefault();
+                }
+
+                function onPointerUp(){
+                    if(!dragging) return;
+                    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(widths)); }catch(e){}
+                    dragging = null;
+                    document.documentElement.style.cursor = '';
+                    document.removeEventListener('mousemove', onPointerMove);
+                    document.removeEventListener('mouseup', onPointerUp);
+                    document.removeEventListener('touchmove', onTouchMove);
+                    document.removeEventListener('touchend', onPointerUp);
+                }
+
+                function positionResizers(){
+                    const cols = Array.from(colgroup.children);
+                    // update measured widths
+                    for(let i=0;i<cols.length;i++){
+                        try{ widths[i] = Math.round(cols[i].getBoundingClientRect().width); }catch(e){}
+                    }
+
+                    const resizers = headerRow._colResizers || [];
+                    const headerRect = headerRow.getBoundingClientRect();
+                    const headerCells = headerRow.cells || headerRow.querySelectorAll('th,td') || [];
+                    for(let i=0;i<resizers.length;i++){
+                        const r = resizers[i];
+                        const leftIndex = parseInt(r.dataset.leftIndex,10);
+                        const cell = headerCells[leftIndex];
+                        if(!cell) continue;
+                        const cellRect = cell.getBoundingClientRect();
+                        const left = Math.round(cellRect.right - headerRect.left);
+                        const offset = Math.round(r.offsetWidth/2) || 9;
+                        r.style.left = (left - offset) + 'px';
+                        r.style.top = '0px';
+                        r.style.height = Math.round(headerRect.height) + 'px';
                     }
                 }
 
-                function sortTable(colIdx) {
-                    const table = document.getElementById("recordsTable");
-                    const tbody = table.tBodies[0];
-                    const rows = Array.from(tbody.rows);
-                    const asc = sortDirections[colIdx];
-                    rows.sort((a, b) => {
-                        let valA = a.cells[colIdx].textContent.trim();
-                        let valB = b.cells[colIdx].textContent.trim();
+                // initial build and position
+                createResizers();
+                positionResizers();
 
-                        // Try to parse as number if possible
-                        let numA = parseFloat(valA.replace(/[^\d.-]/g, ''));
-                        let numB = parseFloat(valB.replace(/[^\d.-]/g, ''));
-                        if (!isNaN(numA) && !isNaN(numB)) {
-                            return asc ? numA - numB : numB - numA;
-                        }
+                const mo = new MutationObserver(() => { ensureColgroup(); createResizers(); positionResizers(); });
+                mo.observe(headerRow, { childList: true, subtree: true });
 
-                        // For date column (assuming colIdx == 2)
-                        if (colIdx === 2) {
-                            let dateA = new Date(valA);
-                            let dateB = new Date(valB);
-                            if (!isNaN(dateA) && !isNaN(dateB)) {
-                                return asc ? dateA - dateB : dateB - dateA;
-                            }
-                        }
+                window.addEventListener('resize', () => { positionResizers(); });
+                container.addEventListener('scroll', () => { positionResizers(); });
+                let repositionTimer = null;
+                const debouncePos = () => { clearTimeout(repositionTimer); repositionTimer = setTimeout(positionResizers, 120); };
+                const mo2 = new MutationObserver(debouncePos);
+                mo2.observe(table, { childList: true, subtree: true, attributes: true });
 
-                        // For status column (colIdx == 5)
-                        if (colIdx === 5) {
-                            // Normalize status to "Paid" or "Pending"
-                            let statusA = valA.toLowerCase().includes("paid") ? "Paid" : "Pending";
-                            let statusB = valB.toLowerCase().includes("paid") ? "Paid" : "Pending";
-                            // Sort "Paid" before "Pending" in ascending
-                            if (statusA !== statusB) {
-                                return asc ? (statusA === "Paid" ? -1 : 1) : (statusA === "Paid" ? 1 : -1);
-                            }
-                            return 0;
-                        }
+            })();
+            });
+        </script>
+    
+        <!-- Recent Records Table -->
+        <div class="mt-2 bg-zinc-800 rounded-lg shadow-2xl overflow-hidden border border-zinc-700">
+            <div id="filtersContainer" class="flex flex-row items-end gap-4 p-4 border-b border-zinc-700 bg-zinc-800">
 
-                        // Otherwise, string compare
-                        return asc ? valA.localeCompare(valB) : valB.localeCompare(valA);
-                    });
-                    // Re-append sorted rows
-                    rows.forEach(row => tbody.appendChild(row));
-                    sortDirections[colIdx] = !asc;
+                <!-- Page size selector -->
+                <div class="flex flex-col w-full">
+                    <label for="pageSizeSelect" class="text-zinc-400 text-sm mb-1">Show</label>
+                    <select id="pageSizeSelect" class="px-3 py-2 rounded-lg bg-zinc-700 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full" onchange="onPageSizeChanged()">
+                        <option value="10">10</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                        <option value="250">250</option>
+                        <option value="500">500</option>
+                        <option value="1000">1000</option>
+                        <option value="all">All</option>
+                    </select>
+                </div>
+                
+                <!-- Search -->
+                <div class="flex flex-col w-full md:flex-1">
+                    <label for="searchInput" class="text-zinc-400 text-sm mb-1">Search</label>
+                    <div class="relative">
+                    <svg class="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"></path>
+                    </svg>
+                    <input id="searchInput" type="text" placeholder="Search records, invoice, name..." class="pl-10 pr-4 py-2 rounded-lg bg-zinc-700 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-auto md:flex-1" onkeyup="applyFilters()">
+                    </div>
+                </div>
+
+                <!-- Date range -->
+                <div class="flex gap-3 w-full md:w-auto">
+                    <div class="flex flex-col">
+                    <label for="dateFrom" class="text-zinc-400 text-sm mb-1">From</label>
+                    <input id="dateFrom" type="date" class="px-3 py-2 rounded-lg bg-zinc-700 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-40" onchange="applyFilters()">
+                    </div>
+                    <div class="flex flex-col">
+                    <label for="dateTo" class="text-zinc-400 text-sm mb-1">To</label>
+                    <input id="dateTo" type="date" class="px-3 py-2 rounded-lg bg-zinc-700 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-40" onchange="applyFilters()">
+                    </div>
+                </div>
+
+                <!-- Status toggles: label above on small screens, inline on md+ -->
+                <div class="flex flex-col md:flex-row md:items-center md:gap-4">
+                    <div class="flex flex-col">
+                        <label class="text-zinc-400 text-sm mb-1">Status</label>
+                        <div class="flex items-center gap-2">
+                            <div class="flex items-center">
+                                <input id="filterPaid" type="checkbox" class="hidden peer" onchange="applyFilters()">
+                                <label for="filterPaid" class="cursor-pointer px-4 py-2 rounded-full border border-green-600 text-green-400 bg-transparent transition-all duration-150 peer-checked:bg-green-600 peer-checked:text-white peer-checked:border-transparent">
+                                    Paid
+                                </label>
+                            </div>
+
+                            <div class="flex items-center">
+                                <input id="filterPending" type="checkbox" class="hidden peer" onchange="applyFilters()">
+                                <label for="filterPending" class="cursor-pointer px-4 py-2 rounded-full border border-red-600 text-red-400 bg-transparent transition-all duration-150 peer-checked:bg-red-600 peer-checked:text-white peer-checked:border-transparent">
+                                    Pending
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Clear -->
+                <div class="flex items-center md:pl-2">
+                    <button type="button" onclick="clearFilters()" class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-sm text-zinc-100">Clear</button>
+                </div>
+
+
+            </div>
+
+            <div class="table-container">
+                <table id="recordsTable" class="w-full" style="table-layout: fixed; position: relative;">
+                    <!-- Progress bar at the top of table -->
+                    <div id="loadingProgressBar" style="display: none;"></div>
+                    
+                    <thead class="bg-zinc-900/50 border-b border-zinc-700">
+                    <tr>
+                        {% comment %} <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(0)">Record # &#8597;</th> {% endcomment %}
+                        <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(1)">UID &#8597;</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(2)">Invoice # &#8597;</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(3)">Customer &#8597;</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(4)">Date &#8597;</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(5)">Amount &#8597;</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(6)">Paid Amount &#8597;</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(7)">Remaining &#8597;</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(8)">Status &#8597;</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                    <tbody id="recordsTbody" class="divide-y divide-zinc-700">
+                    <!-- rows will be loaded via /api/records/ using JS (infinite scroll + search) -->
+                    </tbody>
+                </table>
+            </div>
+
+            <script>
+            // Keep filters visible always. Measure their height and set CSS variable so the table header
+            // remains sticky below the filters area.
+            (function(){
+                const filtersWrap = document.getElementById('filtersWrap');
+                const filtersContainer = document.getElementById('filtersContainer');
+                if(!filtersWrap || !filtersContainer) return;
+
+                function updateFiltersHeight(){
+                    try{
+                        const rect = filtersContainer.getBoundingClientRect();
+                        document.documentElement.style.setProperty('--filters-height', rect.height + 'px');
+                    }catch(e){/* ignore */}
                 }
-                </script>
+
+                requestAnimationFrame(updateFiltersHeight);
+                window.addEventListener('resize', updateFiltersHeight);
+                const scrollContainer = document.querySelector('.overflow-x-auto');
+                if(scrollContainer) scrollContainer.addEventListener('scroll', updateFiltersHeight);
+                setTimeout(updateFiltersHeight, 160);
+            })();
+            </script>
+
+            <!-- Column resizer note: we insert a colgroup dynamically via JS to avoid changing server-side templates -->
+
+            <script>
+            // Page size control helper
+            function getSelectedPageSize(){
+                const sel = document.getElementById('pageSizeSelect');
+                if(!sel) return 50;
+                const v = sel.value;
+                if(v === 'all') return 'all';
+                const n = parseInt(v,10);
+                return isNaN(n) ? 50 : n;
+            }
+
+            function onPageSizeChanged(){
+                // When page size changes, reset loader state and trigger reload of records
+                const ev = new CustomEvent('records:pageSizeChanged', { detail: { page_size: getSelectedPageSize() } });
+                window.dispatchEvent(ev);
+            }
+            // Column mapping:
+            // 0: recNumber, 1: uid, 2: invoiceNum, 3: username, 4: date, 5: amount, 6: paidAmount, 7: remainingAmount, 8: status, 9: actions
+            const TOTAL_COLUMNS = 10;
+            let sortDirections = Array.from({length: TOTAL_COLUMNS}, () => true);
+
+            function parseDateFlexible(dateStr) {
+                if (!dateStr) return NaN;
+                // Try ISO first
+                let d = new Date(dateStr);
+                if (!isNaN(d)) return d;
+                // Try DD-MM-YYYY or DD/MM/YYYY
+                const parts = dateStr.trim().split(/[-\/\.]/);
+                if (parts.length >= 3) {
+                // assume day-month-year
+                let day = parseInt(parts[0], 10);
+                let month = parseInt(parts[1], 10) - 1;
+                let year = parseInt(parts[2], 10);
+                if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+                    return new Date(year, month, day);
+                }
+                }
+                return new Date(NaN);
+            }
+
+            // New applyFilters: sends the controls (search, date range, status) to the server
+            // which will return the filtered/paginated results. This replaces DOM-only filtering.
+            function applyFilters() {
+                // Build filter params and trigger the global search handler (debounced)
+                const search = document.getElementById("searchInput").value.trim();
+                const fromVal = document.getElementById("dateFrom").value;
+                const toVal = document.getElementById("dateTo").value;
+                const filterPaid = document.getElementById("filterPaid").checked;
+                const filterPending = document.getElementById("filterPending").checked;
+
+                // Determine status param: '' (both), 'paid', or 'pending'
+                let status = '';
+                if (filterPaid && !filterPending) status = 'paid';
+                else if (!filterPaid && filterPending) status = 'pending';
+
+                // Expose current filters to the global records loader by setting inputs (the loader reads them)
+                // We'll trigger a reload via the search input's dispatch or directly call the loader's search handler
+                // Use a custom event to notify the pagination loader
+                const ev = new CustomEvent('records:filtersChanged', { detail: { search, date_from: fromVal, date_to: toVal, status } });
+                window.dispatchEvent(ev);
+            }
+
+            function clearFilters() {
+                document.getElementById("searchInput").value = "";
+                document.getElementById("dateFrom").value = "";
+                document.getElementById("dateTo").value = "";
+                document.getElementById("filterPaid").checked = false;
+                document.getElementById("filterPending").checked = false;
+                // trigger filters changed without reloading the page so page-size selection persists
+                applyFilters();
+            }
+
+            function sortTable(colIdx) {
+                const table = document.getElementById("recordsTable");
+                const tbody = table.tBodies[0];
+                const rows = Array.from(tbody.rows).filter(r => r.style.display !== "none"); // keep order among visible rows
+                const asc = sortDirections[colIdx];
+
+                rows.sort((a, b) => {
+                let valA = a.cells[colIdx] ? a.cells[colIdx].textContent.trim() : "";
+                let valB = b.cells[colIdx] ? b.cells[colIdx].textContent.trim() : "";
+
+                // Date column (4)
+                if (colIdx === 4) {
+                    let dateA = parseDateFlexible(valA);
+                    let dateB = parseDateFlexible(valB);
+                    if (!isNaN(dateA) && !isNaN(dateB)) {
+                    return asc ? dateA - dateB : dateB - dateA;
+                    }
+                }
+
+                // Status column (8)
+                if (colIdx === 8) {
+                    let statusA = valA.toLowerCase().includes("paid") ? "Paid" : "Pending";
+                    let statusB = valB.toLowerCase().includes("paid") ? "Paid" : "Pending";
+                    if (statusA !== statusB) {
+                    return asc ? (statusA === "Paid" ? -1 : 1) : (statusA === "Paid" ? 1 : -1);
+                    }
+                    return 0;
+                }
+
+                // Try numeric comparison (strip non-numeric)
+                let numA = parseFloat(valA.replace(/[^\d.-]/g, ''));
+                let numB = parseFloat(valB.replace(/[^\d.-]/g, ''));
+                if (!isNaN(numA) && !isNaN(numB)) {
+                    return asc ? numA - numB : numB - numA;
+                }
+
+                // Fallback string compare
+                return asc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                });
+
+                // Re-append sorted rows at the end of tbody (preserves only visible rows' sorted order)
+                rows.forEach(row => tbody.appendChild(row));
+                sortDirections[colIdx] = !asc;
+            }
+
+            // Initialize: keep filters and sorting ready
+            // Note: applyFilters will be triggered by the records loader initialization to avoid races
+            </script>
             </div>
         </div>
+
     </div>
 
-    <!-- JavaScript for Dashboard -->
-    <script>
-        // Simulate real-time data updates
-        function updateDashboard() {
-            console.log('Dashboard data refreshed');
-        }
+    <!-- Percentage Button (Bottom Right Corner) -->
+    <button id="percentageBtn" class="hidden px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-lg font-semibold text-sm">
+        0%
+    </button>
 
-        // Refresh dashboard every 30 seconds
-        setInterval(updateDashboard, 30000);
+        <!-- JavaScript for Dashboard -->
+        <script>
+            // Simulate real-time data updates
+            function updateDashboard() {
+                console.log('Dashboard data refreshed');
+            }
 
-        // Initial load
-        window.addEventListener('DOMContentLoaded', function() {
-            console.log('Dashboard loaded');
-        });
-    </script>
-    <script>
-        const activityContainer = document.querySelector('.space-y-4');
+            // Refresh dashboard every 30 seconds
+            setInterval(updateDashboard, 30000);
 
-        // Fetch recent activities
-        async function fetchActivities() {
-            try {
+            // Initial load
+            window.addEventListener('DOMContentLoaded', function() {
+                console.log('Dashboard loaded');
+            });
+            </script>
+            <script>
+            const activityContainer = document.querySelector('.space-y-4');
+
+            // Fetch recent activities
+            async function fetchActivities() {
+                try {
                 const response = await fetch('/api/recent-activity/'); // Django API endpoint
                 const data = await response.json();
 
@@ -183,55 +755,386 @@
                 data.activities.forEach((activity, index) => {
                     const colorClasses = ['bg-green-400','bg-blue-400','bg-yellow-400','bg-purple-400','bg-red-400'];
                     const activityHTML = `
-                        <div class="flex items-start space-x-4">
-                            <div class="w-2 h-2 ${colorClasses[index % colorClasses.length]} rounded-full mt-2"></div>
-                            <div class="flex-1">
-                                <p class="text-sm text-zinc-100">${activity.log_name}</p>
-                                <p class="text-xs text-zinc-400 mt-1">${activity.log_desc}</p>
-                                <p class="text-xs text-zinc-500 mt-1">${formatTime(activity.log_date_time)}</p>
-                            </div>
+                    <div class="flex items-start space-x-4">
+                        <div class="w-2 h-2 ${colorClasses[index % colorClasses.length]} rounded-full mt-2"></div>
+                        <div class="flex-1">
+                        <p class="text-sm text-zinc-100">${activity.log_name}</p>
+                        <p class="text-xs text-zinc-400 mt-1">${activity.log_desc}</p>
+                        <p class="text-xs text-zinc-500 mt-1">${formatTime(activity.log_date_time)}</p>
                         </div>
+                    </div>
                     `;
                     activityContainer.innerHTML += activityHTML;
                 });
-            } catch (error) {
+                } catch (error) {
                 console.error('Error fetching activities:', error);
+                }
             }
-        }
 
-        // Format timestamp to human-readable like "2 hours ago"
-        function formatTime(datetimeStr) {
-            const activityTime = new Date(datetimeStr);
-            const now = new Date();
-            const diff = Math.floor((now - activityTime) / 1000); // seconds
+            // Format timestamp to human-readable like "2 hours ago"
+            function formatTime(datetimeStr) {
+                const activityTime = new Date(datetimeStr);
+                const now = new Date();
+                const diff = Math.floor((now - activityTime) / 1000); // seconds
 
-            if(diff < 60) return `${diff} seconds ago`;
-            if(diff < 3600) return `${Math.floor(diff/60)} minutes ago`;
-            if(diff < 86400) return `${Math.floor(diff/3600)} hours ago`;
-            return `${Math.floor(diff/86400)} days ago`;
-        }
+                if(diff < 60) return `${diff} seconds ago`;
+                if(diff < 3600) return `${Math.floor(diff/60)} minutes ago`;
+                if(diff < 86400) return `${Math.floor(diff/3600)} hours ago`;
+                return `${Math.floor(diff/86400)} days ago`;
+            }
 
 
-        async function fetchActivities() {
-            try {
+            async function fetchStats() {
+                try {
                 const response = await fetch('/api/get_stats/'); // Django API endpoint
                 const data = await response.json();
                 console.log(data); // Log the fetched data for debugging
-                document.getElementById('total_records').textContent = data.total_records;
-                document.getElementById('total_revenue').textContent = `₹${data.total_revenue.toFixed(2)}`;
-                document.getElementById('total_pending_amount').textContent = `₹${data.total_pending_amount.toFixed(2)}`;
-                document.getElementById('total_paid_customers').textContent = data.total_paid_customers;
+                const tr = document.getElementById('total_records'); if(tr) tr.textContent = data.total_records;
+                const trev = document.getElementById('total_revenue'); if(trev) trev.textContent = `₹${(data.total_revenue || 0).toFixed(2)}`;
+                const tpend = document.getElementById('total_pending_amount'); if(tpend) tpend.textContent = `₹${(data.total_pending_amount || 0).toFixed(2)}`;
+                const tpaid = document.getElementById('total_paid_customers'); if(tpaid) tpaid.textContent = data.total_paid_customers;
 
-                document.getElementById('completed').textContent = data.total_paid_customers;
-                document.getElementById('pending').textContent = parseInt(data.total_records) - parseInt(data.total_paid_customers);
-            } catch (error) {
+                const completedEl = document.getElementById('completed'); if(completedEl) completedEl.textContent = data.total_paid_customers;
+                const pendingEl = document.getElementById('pending'); if(pendingEl) pendingEl.textContent = (parseInt(data.total_records || 0) - parseInt(data.total_paid_customers || 0));
+                } catch (error) {
                 console.error('Error fetching activities:', error);
+                }
             }
-        }
 
-        fetchActivities();
+            document.addEventListener('DOMContentLoaded', function(){
+                // run fetchStats after DOM is ready and elements exist
+                (async function(){
+                    try{ await fetchStats(); }catch(e){ console.warn('fetchStats failed', e); }
+                })();
+            });
 
-    </script>
+            async function fetchStats() {
+                try {
+                    const response = await fetch('/api/get_stats/'); // Django API endpoint
+                    const data = await response.json();
+                    console.log(data); // Log the fetched data for debugging
+                    const elTotalRecords = document.getElementById('total_records');
+                    const elTotalRevenue = document.getElementById('total_revenue');
+                    const elTotalPending = document.getElementById('total_pending_amount');
+                    const elTotalPaidCustomers = document.getElementById('total_paid_customers');
+                    if(elTotalRecords) elTotalRecords.textContent = data.total_records;
+                    if(elTotalRevenue) elTotalRevenue.textContent = `₹${Number(data.total_revenue || 0).toFixed(2)}`;
+                    if(elTotalPending) elTotalPending.textContent = `₹${Number(data.total_pending_amount || 0).toFixed(2)}`;
+                    if(elTotalPaidCustomers) elTotalPaidCustomers.textContent = data.total_paid_customers;
+
+                    const elCompleted = document.getElementById('completed');
+                    const elPending = document.getElementById('pending');
+                    if(elCompleted) elCompleted.textContent = data.total_paid_customers;
+                    if(elPending) elPending.textContent = String((Number(data.total_records || 0) - Number(data.total_paid_customers || 0)));
+                } catch (error) {
+                    console.error('Error fetching activities:', error);
+                    throw error;
+                }
+            }
+
+        </script>
+
+        <script>
+            // Chunked loader: load the records automatically in 4 chunks (25% each) and show progress bar.
+            (function(){
+            const tbody = document.getElementById('recordsTbody');
+            const searchInput = document.getElementById('searchInput');
+            const loadingProgressBar = document.getElementById('loadingProgressBar');
+            const percentageBtn = document.getElementById('percentageBtn');
+
+            const CHUNKS = 4; // 4 chunks => 25% each
+            let currentFilters = { search: '', date_from: '', date_to: '', status: '' };
+            let loading = false;
+            // Track the last fully-loaded filter state to avoid re-loading repeatedly
+            let lastLoadedFilterKey = null;
+            let lastLoadedTotal = 0;
+
+            function td(txt, classes='px-6 py-4 whitespace-nowrap text-sm text-zinc-400'){
+                const e = document.createElement('td');
+                e.className = classes;
+                e.textContent = txt;
+                return e;
+            }
+
+            function renderRow(record) {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-zinc-700/30 transition-colors duration-150';
+
+                //tr.appendChild(td(record.recNumber, 'px-6 py-4 whitespace-nowrap text-sm font-medium text-zinc-100'));
+                tr.appendChild(td(record.uid, 'px-6 py-4 whitespace-nowrap text-sm font-medium text-zinc-100'));
+                tr.appendChild(td(record.invoiceNum, 'px-6 py-4 whitespace-nowrap text-sm font-medium text-zinc-100'));
+                tr.appendChild(td(record.username, 'px-6 py-4 whitespace-nowrap text-sm font-medium text-zinc-100'));
+                tr.appendChild(td(record.date, 'px-6 py-4 whitespace-nowrap text-sm text-zinc-400'));
+                tr.appendChild(td('₹'+Number(record.amount).toFixed(2), 'px-6 py-4 whitespace-nowrap text-sm text-zinc-400'));
+                tr.appendChild(td('₹'+Number(record.paidAmount).toFixed(2), 'px-6 py-4 whitespace-nowrap text-sm text-zinc-400'));
+                tr.appendChild(td('₹'+Number(record.remainingAmount).toFixed(2), 'px-6 py-4 whitespace-nowrap text-sm text-zinc-400'));
+
+                const statusTd = document.createElement('td');
+                statusTd.className = 'px-6 py-4 whitespace-nowrap text-sm';
+                if(record.remark === 'Paid'){
+                    const span = document.createElement('span');
+                    span.className = 'px-3 py-1 rounded-lg text-xs font-medium bg-green-900/40 text-green-400';
+                    span.textContent = record.remark;
+                    statusTd.appendChild(span);
+                } else {
+                    const span = document.createElement('span');
+                    span.className = 'px-3 py-1 rounded-lg text-xs font-medium bg-red-900/40 text-red-400';
+                    span.textContent = 'Pending';
+                    statusTd.appendChild(span);
+                }
+                tr.appendChild(statusTd);
+
+                const actionTd = document.createElement('td');
+                actionTd.className = 'px-6 py-4 whitespace-nowrap text-sm';
+                const a = document.createElement('a');
+                a.className = 'px-3 py-1 rounded-lg text-xs font-medium bg-blue-900/40 text-blue-400';
+                a.href = record.see_details || ('/print/' + record.invoiceNum);
+                a.target = '_blank';
+                a.textContent = 'See Details';
+                actionTd.appendChild(a);
+                tr.appendChild(actionTd);
+
+                return tr;
+            }
+
+            function showProgress(percent){
+                // Show progress bar at top of table
+                if(loadingProgressBar) {
+                    loadingProgressBar.style.display = 'block';
+                    loadingProgressBar.style.width = `${percent}%`;
+                }
+                
+                // Show percentage button at bottom right
+                if(percentageBtn) {
+                    percentageBtn.classList.remove('hidden');
+                    percentageBtn.textContent = `${percent}%`;
+                }
+            }
+
+            function hideProgress(){
+                // Hide progress bar after a delay
+                setTimeout(() => {
+                    if(loadingProgressBar) {
+                        loadingProgressBar.style.display = 'none';
+                        loadingProgressBar.style.width = '0%';
+                    }
+                    
+                    // Hide percentage button
+                    if(percentageBtn) {
+                        percentageBtn.classList.add('hidden');
+                    }
+                }, 500);
+            }
+
+            function buildParams(extra){
+                const p = new URLSearchParams();
+                if(extra && extra.size !== undefined) p.set('size', extra.size);
+                if(extra && extra.offset !== undefined) p.set('offset', extra.offset);
+                if(currentFilters.search) p.set('search', currentFilters.search);
+                if(currentFilters.date_from) p.set('date_from', currentFilters.date_from);
+                if(currentFilters.date_to) p.set('date_to', currentFilters.date_to);
+                if(currentFilters.status) p.set('status', currentFilters.status);
+                return p.toString();
+            }
+
+            async function fetchTotalCount(){
+                // Try to get total from records endpoint headers or JSON
+                try{
+                    const params = new URLSearchParams();
+                    params.set('size', 1);
+                    params.set('offset', 0);
+                    if(currentFilters.search) params.set('search', currentFilters.search);
+                    if(currentFilters.date_from) params.set('date_from', currentFilters.date_from);
+                    if(currentFilters.date_to) params.set('date_to', currentFilters.date_to);
+                    if(currentFilters.status) params.set('status', currentFilters.status);
+
+                    const res = await fetch('/api/records/?' + params.toString());
+                    if(!res.ok) return null;
+                    // Common pattern: servers send X-Total-Count header
+                    const headerTotal = res.headers.get('X-Total-Count') || res.headers.get('x-total-count');
+                    if(headerTotal) return parseInt(headerTotal, 10);
+
+                    const json = await res.json();
+                    // Some APIs return {total: N, results: [...]}
+                    if(json && (json.total || json.total_records || json.count)){
+                        return json.total || json.total_records || json.count;
+                    }
+                }catch(e){
+                    console.warn('Could not fetch total count via header/json:', e);
+                }
+
+                // Try a dedicated count endpoint
+                try{
+                    const params = new URLSearchParams();
+                    if(currentFilters.search) params.set('search', currentFilters.search);
+                    if(currentFilters.date_from) params.set('date_from', currentFilters.date_from);
+                    if(currentFilters.date_to) params.set('date_to', currentFilters.date_to);
+                    if(currentFilters.status) params.set('status', currentFilters.status);
+                    const res2 = await fetch('/api/records/count/?' + params.toString());
+                    if(res2.ok){
+                        const j2 = await res2.json();
+                        if(j2 && (j2.total || j2.count)) return j2.total || j2.count;
+                    }
+                }catch(e){}
+
+                return null; // unknown
+            }
+
+            async function loadInChunks(){
+                if(loading) return;
+                loading = true;
+                tbody.innerHTML = '';
+                showProgress(0);
+                // Determine desired page size selection
+                const pageSize = getSelectedPageSize();
+
+                // If user selected a numeric pageSize, request only that many records (server-side filtering still applied)
+                if(pageSize !== 'all' && Number.isFinite(pageSize)){
+                    try{
+                        const params = buildParams({ size: pageSize, offset: 0 });
+                        const res = await fetch('/api/records/?' + params);
+                        if(!res.ok) throw new Error('fetch failed');
+                        const data = await res.json();
+                        if(Array.isArray(data)){
+                            data.forEach(r => tbody.appendChild(renderRow(r)));
+                        } else if(data && data.results) {
+                            // some APIs return {results: [...]} or {results: [...], total: N}
+                            data.results.forEach(r => tbody.appendChild(renderRow(r)));
+                        }
+                        showProgress(100);
+                        setTimeout(hideProgress, 500);
+                        loading = false;
+                        // store load snapshot
+                        lastLoadedFilterKey = JSON.stringify(currentFilters) + '::' + String(pageSize);
+                        lastLoadedTotal = Array.isArray(data) ? data.length : (data.results ? data.results.length : 0);
+                        return;
+                    }catch(e){
+                        console.error('Page-size fetch error', e);
+                        // fall through to 'all' behavior
+                    }
+                }
+
+                let total = await fetchTotalCount();
+                // If server doesn't report total, we'll fetch first page and use its length as total (best-effort fallback)
+                if(!total){
+                    try{
+                        const firstParams = buildParams({ size: 50, offset: 0 });
+                        const r = await fetch('/api/records/?' + firstParams);
+                        const data = await r.json();
+                        if(Array.isArray(data)){
+                            // Unknown total - fallback to client-driven single-page loading
+                            data.forEach(r => tbody.appendChild(renderRow(r)));
+                            showProgress(100);
+                            setTimeout(hideProgress, 800);
+                            loading = false;
+                            // mark as fully loaded for current filters so we don't reload repeatedly
+                            lastLoadedFilterKey = JSON.stringify(currentFilters);
+                            lastLoadedTotal = data.length;
+                            return;
+                        }
+                    }catch(e){ console.error(e); }
+                }
+
+                if(!total) total = 0; // defensive
+
+                const chunkSize = total > 0 ? Math.ceil(total / CHUNKS) : 0;
+
+                if(total === 0 || chunkSize === 0){
+                    // nothing to load
+                    showProgress(100);
+                    setTimeout(hideProgress, 500);
+                    loading = false;
+                    return;
+                }
+
+                let loaded = 0;
+                // mark this as the currently-loading filter snapshot
+                const currentKey = JSON.stringify(currentFilters);
+                // If we've already loaded all records for these filters, skip re-loading
+                if(lastLoadedFilterKey && lastLoadedFilterKey === currentKey && lastLoadedTotal > 0){
+                    // nothing to do
+                    showProgress(100);
+                    setTimeout(hideProgress, 700);
+                    loading = false;
+                    return;
+                }
+                // reset tracking while loading
+                lastLoadedFilterKey = currentKey;
+                lastLoadedTotal = 0;
+                for(let i=0;i<CHUNKS;i++){
+                    const offset = i * chunkSize;
+                    const size = Math.min(chunkSize, total - offset);
+                    if(size <= 0) break;
+                    try{
+                        const params = buildParams({ size, offset });
+                        const res = await fetch('/api/records/?' + params);
+                        if(!res.ok) throw new Error('fetch failed');
+                        const data = await res.json();
+                        if(Array.isArray(data) && data.length > 0){
+                            data.forEach(r => tbody.appendChild(renderRow(r)));
+                            loaded += data.length;
+                        }
+                    }catch(e){
+                        console.error('Chunk load error', e);
+                    }
+                    const percent = Math.min(100, Math.round((loaded / total) * 100));
+                    showProgress(percent);
+                    // small pause so progress is visible (and to avoid overloading server)
+                    await new Promise(r=>setTimeout(r, 250));
+                }
+
+                // done
+                showProgress(100);
+                setTimeout(hideProgress, 700);
+                loading = false;
+                // record that we've fully loaded for this filter set
+                if(total > 0) lastLoadedTotal = total;
+            }
+
+            // debounce helper
+            function debounce(fn, wait){
+                let t;
+                return function(...args){ clearTimeout(t); t = setTimeout(()=>fn.apply(this,args), wait); }
+            }
+
+            const onSearch = debounce(function(){
+                currentFilters.search = searchInput.value.trim();
+                loadInChunks();
+            }, 300);
+
+            searchInput.addEventListener('input', onSearch);
+
+            // Listen to filter change event dispatched by applyFilters()
+            window.addEventListener('records:filtersChanged', function(e){
+                const d = e.detail || {};
+                currentFilters.search = d.search || '';
+                currentFilters.date_from = d.date_from || '';
+                currentFilters.date_to = d.date_to || '';
+                currentFilters.status = d.status || '';
+                // reset search input if event came from other controls
+                if(searchInput.value.trim() !== currentFilters.search) searchInput.value = currentFilters.search;
+                loadInChunks();
+            });
+
+            // Listen to page size change events
+            window.addEventListener('records:pageSizeChanged', function(e){
+                // when page size changes, clear lastLoaded snapshot so new load happens
+                lastLoadedFilterKey = null;
+                lastLoadedTotal = 0;
+                loadInChunks();
+            });
+
+            // Initial load
+            document.addEventListener('DOMContentLoaded', function(){
+                // ensure filters are synced and start loading
+                currentFilters.search = document.getElementById('searchInput').value.trim();
+                currentFilters.date_from = document.getElementById('dateFrom').value || '';
+                currentFilters.date_to = document.getElementById('dateTo').value || '';
+                currentFilters.status = (document.getElementById('filterPaid').checked && !document.getElementById('filterPending').checked) ? 'paid' : (document.getElementById('filterPending').checked && !document.getElementById('filterPaid').checked ? 'pending' : '');
+                loadInChunks();
+            });
+        })();
+        </script>
 
 </body>
 </html>

@@ -1,0 +1,260 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>HealthLedger | Login</title>
+	{% load static %}
+	<link href="{% static 'output.css' %}" rel="stylesheet">
+	<style>
+		/* small helper for the sliding forms */
+		.form-slider { transition: transform 300ms cubic-bezier(.2,.9,.2,1); }
+		.toggle-btn-active { background: rgba(255,255,255,0.06); }
+	</style>
+</head>
+<body class="bg-zinc-900 min-h-screen text-zinc-100 flex items-center justify-center px-4">
+
+	<div class="max-w-4xl w-full grid grid-cols-1 lg:grid-cols-1 gap-8 items-center">
+		<div class="bg-zinc-800 rounded-2xl p-6 sm:p-10 border border-zinc-700 shadow-2xl">
+			<div class="flex items-center justify-between mb-6">
+				<div>
+					<h2 class="text-2xl font-semibold">Sign in</h2>
+					<p class="text-sm text-zinc-400 mt-1">Choose your login type and enter credentials</p>
+				</div>
+				<div class="hidden sm:flex items-center gap-3">
+					<div class="w-10 h-10 bg-zinc-700 rounded flex items-center justify-center text-sm font-medium">TN</div>
+				</div>
+			</div>
+
+			<!-- Toggle -->
+			<div class="flex bg-zinc-900/30 rounded-lg p-1 border border-zinc-700 mb-6 w-full max-w-md">
+				<button id="btn-staff" class="toggle-btn flex-1 text-sm py-2 rounded-lg text-zinc-100 font-medium text-center">Hospital Staff</button>
+				<button id="btn-patient" class="toggle-btn flex-1 text-sm py-2 rounded-lg text-zinc-400 font-medium text-center">Patient</button>
+			</div>
+
+			<!-- Forms container -->
+			<div class="relative overflow-hidden">
+				<div id="forms" class="w-[200%] flex form-slider" style="transform: translateX(0%);">
+					<!-- Staff Form -->
+					<form id="form-staff" class="w-1/2 pr-6" method="post" action="/login/">
+						{% csrf_token %}
+						<input type="hidden" name="user_type" value="S">
+						<div class="space-y-4">
+							<label class="block">
+								<span class="text-sm text-zinc-400">Hospital Email</span>
+								<input name="username" type="email" required class="mt-1 block w-full rounded-md bg-zinc-900/60 border border-zinc-700 text-zinc-100 placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-zinc-600" placeholder="staff@hospital.org">
+							</label>
+
+							<label class="block">
+								<span class="text-sm text-zinc-400">Password</span>
+								<div class="relative">
+									<input id="staff-password" name="password" type="password" required class="mt-1 block w-full rounded-md bg-zinc-900/60 border border-zinc-700 text-zinc-100 placeholder-zinc-500 px-3 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-zinc-600" placeholder="••••••••">
+									<button type="button" aria-label="Toggle password visibility" data-target="staff-password" class="absolute inset-y-0 right-0 pr-3 flex items-center text-zinc-400 hover:text-zinc-100">
+										<!-- Eye (visible) and Eye-off (hidden) SVGs; we'll toggle via JS -->
+										<svg id="staff-eye-open" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+										</svg>
+										<svg id="staff-eye-closed" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.477 0-8.268-2.943-9.542-7a9.956 9.956 0 012.223-3.434m3.06-2.467A9.97 9.97 0 0112 5c4.477 0 8.268 2.943 9.542 7-.162.516-.373 1.012-.628 1.475M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3l18 18" />
+										</svg>
+									</button>
+								</div>
+							</label>
+
+							<div class="flex items-center justify-between text-sm text-zinc-400">
+								<label class="inline-flex items-center gap-2">
+									<input type="checkbox" hidden checked name="remember" class="rounded bg-zinc-700 text-zinc-200 focus:ring-zinc-600">
+									{% comment %} <span>Remember me</span> {% endcomment %}
+								</label>
+								<a href="#" class="text-sm text-zinc-400 hover:text-zinc-100">Forgot?</a>
+							</div>
+
+							<div>
+								<button type="submit" class="w-full px-4 py-3 bg-zinc-200 text-zinc-900 rounded-lg font-medium hover:bg-zinc-100 transition">Sign in as Staff</button>
+							</div>
+						</div>
+					</form>
+
+					<!-- Patient Form -->
+					<form id="form-patient" class="w-1/2 pl-6" method="post" action="/login/">
+						{% csrf_token %}
+						<input type="hidden" name="user_type" value="P">
+						<div class="space-y-4">
+							<label class="block">
+								<span class="text-sm text-zinc-400">Patient ID or Email</span>
+								<input name="username" type="text" required class="mt-1 block w-full rounded-md bg-zinc-900/60 border border-zinc-700 text-zinc-100 placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-zinc-600" placeholder="Patient ID or email">
+							</label>
+
+							<label class="block">
+								<span class="text-sm text-zinc-400">Password</span>
+								<div class="relative">
+									<input id="patient-password" name="password" type="password" required class="mt-1 block w-full rounded-md bg-zinc-900/60 border border-zinc-700 text-zinc-100 placeholder-zinc-500 px-3 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-zinc-600" placeholder="••••••">
+									<button type="button" aria-label="Toggle password visibility" data-target="patient-password" class="absolute inset-y-0 right-0 pr-3 flex items-center text-zinc-400 hover:text-zinc-100">
+										<svg id="patient-eye-open" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+										</svg>
+										<svg id="patient-eye-closed" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.477 0-8.268-2.943-9.542-7a9.956 9.956 0 012.223-3.434m3.06-2.467A9.97 9.97 0 0112 5c4.477 0 8.268 2.943 9.542 7-.162.516-.373 1.012-.628 1.475M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3l18 18" />
+										</svg>
+									</button>
+								</div>
+							</label>
+
+							<div class="flex items-center justify-between text-sm text-zinc-400">
+								<label class="inline-flex items-center gap-2">
+									<input type="checkbox" name="remember" class="rounded bg-zinc-700 text-zinc-200 focus:ring-zinc-600">
+									<span>Remember me</span>
+								</label>
+								<a href="#" class="text-sm text-zinc-400 hover:text-zinc-100">Need help?</a>
+							</div>
+
+							<div>
+								<button type="submit" class="w-full px-4 py-3 bg-zinc-200 text-zinc-900 rounded-lg font-medium hover:bg-zinc-100 transition">Sign in as Patient</button>
+							</div>
+						</div>
+					</form>
+				</div>
+			</div>
+
+			<!-- Footer small links -->
+			<div class="mt-6 text-center text-sm text-zinc-500">
+				<a href="/" class="hover:text-zinc-300">Back to Dashboard</a>
+			</div>
+
+            <form action="/login/" class="hidden" method="post" id="token_key_login">
+                {% csrf_token %}
+                <input type="text" name="has_token_key" id="has_token_key">
+            </form>
+		</div>
+		</div>
+
+
+		<script>
+		// Toggle logic to slide between staff and patient forms
+		const btnStaff = document.getElementById('btn-staff');
+		const btnPatient = document.getElementById('btn-patient');
+		const forms = document.getElementById('forms');
+
+		function setActive(role) {
+			if (role === 'staff') {
+				forms.style.transform = 'translateX(0%)';
+				btnStaff.classList.add('text-zinc-100','toggle-btn-active');
+				btnStaff.classList.remove('text-zinc-400');
+				btnPatient.classList.remove('text-zinc-100','toggle-btn-active');
+				btnPatient.classList.add('text-zinc-400');
+			} else {
+				forms.style.transform = 'translateX(-50%)';
+				btnPatient.classList.add('text-zinc-100','toggle-btn-active');
+				btnPatient.classList.remove('text-zinc-400');
+				btnStaff.classList.remove('text-zinc-100','toggle-btn-active');
+				btnStaff.classList.add('text-zinc-400');
+			}
+		}
+
+		btnStaff.addEventListener('click', () => setActive('staff'));
+		btnPatient.addEventListener('click', () => setActive('patient'));
+
+		// Initialize state based on a simple heuristic (or default to staff)
+		document.addEventListener('DOMContentLoaded', () => {
+			setActive('staff');
+			initPasswordToggles();
+			if (typeof initWebAuthnUI === 'function') initWebAuthnUI();
+		});
+
+		// Password visibility toggle initializer
+		function initPasswordToggles() {
+			const buttons = document.querySelectorAll('button[data-target]');
+			buttons.forEach(btn => {
+				const targetId = btn.getAttribute('data-target');
+				const input = document.getElementById(targetId);
+				if (!input) return;
+				const svgs = btn.querySelectorAll('svg');
+				const openIcon = svgs[0];
+				const closedIcon = svgs[1];
+				// Set initial accessible attributes
+				btn.setAttribute('aria-pressed', 'false');
+				btn.setAttribute('title', 'Show password');
+				// Click toggles type and icons
+				btn.addEventListener('click', () => {
+					if (input.type === 'password') {
+						input.type = 'text';
+						btn.setAttribute('aria-pressed', 'true');
+						btn.setAttribute('title', 'Hide password');
+						if (openIcon) openIcon.classList.add('hidden');
+						if (closedIcon) closedIcon.classList.remove('hidden');
+					} else {
+						input.type = 'password';
+						btn.setAttribute('aria-pressed', 'false');
+						btn.setAttribute('title', 'Show password');
+						if (openIcon) openIcon.classList.remove('hidden');
+						if (closedIcon) closedIcon.classList.add('hidden');
+					}
+				});
+			});
+		}
+	</script>
+
+	<!-- Auto-login Passkey Popup (shows when auth_token cookie exists) -->
+	<!-- Modal markup -->
+	<div id="passkey-modal-backdrop" class="hidden fixed inset-0 bg-black/50 z-50 items-center justify-center">
+		<div id="passkey-modal" class="bg-zinc-800 text-zinc-100 rounded-lg shadow-xl w-full max-w-md mx-auto p-6">
+			<div class="flex justify-between items-start">
+				<h3 class="text-lg font-semibold">Login with Passkey</h3>
+				<button id="passkey-modal-close" aria-label="Close" class="text-zinc-300 hover:text-zinc-100">✕</button>
+			</div>
+			<p id="passkey-modal-body" class="mt-4 text-sm text-zinc-300">Sign in using your device passkey.</p>
+			<div class="mt-6 flex gap-3">
+				<button id="passkey-modal-login" class="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded" onclick="document.getElementById('token_key_login').submit()">Login with Key</button>
+				<button id="passkey-modal-cancel" class="flex-1 px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded">Close</button>
+			</div>
+		</div>
+	</div>
+
+	<script>
+		// Simple helper to read cookie by name
+		function getCookie(name) {
+			const value = `; ${document.cookie}`;
+			const parts = value.split(`; ${name}=`);
+			if (parts.length === 2) return parts.pop().split(';').shift();
+			return null;
+		}
+
+		// Show modal when auth_token cookie exists
+		document.addEventListener('DOMContentLoaded', function () {
+			var name = getCookie('auth_token_name') || 'Unknown User';
+            var hasTokenKey = getCookie('auth_token') || null;
+
+            document.getElementById('has_token_key').value = hasTokenKey || '';
+            if (!hasTokenKey) return; 
+			var backdrop = document.getElementById('passkey-modal-backdrop');
+			var body = document.getElementById('passkey-modal-body');
+			var btnLogin = document.getElementById('passkey-modal-login');
+			var btnClose = document.getElementById('passkey-modal-close');
+			var btnCancel = document.getElementById('passkey-modal-cancel');
+
+			// personalize message
+			body.textContent = 'Login as ' + name + ' using your device passkey.';
+
+			// show backdrop and center it using flex
+			backdrop.classList.remove('hidden');
+			backdrop.classList.add('flex');
+
+			// Close handlers
+			btnClose.addEventListener('click', function () { backdrop.classList.remove('flex'); backdrop.classList.add('hidden'); });
+			btnCancel.addEventListener('click', function () { backdrop.classList.remove('flex'); backdrop.classList.add('hidden'); });
+
+			// Login with Key handler: trigger existing passkey sign-in button if present
+			btnLogin.addEventListener('click', function () {
+				backdrop.classList.remove('flex'); backdrop.classList.add('hidden');
+				document.getElementById('token_key_login').submit()
+			});
+		});
+	</script>
+</body>
+</html>
+
