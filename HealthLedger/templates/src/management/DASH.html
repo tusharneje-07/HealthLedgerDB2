@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HealthLedger | Dashboard</title>
     {% load static %}
-    <link href="{% static 'output.css' %}" rel="stylesheet">
+    <link href="{% static 'css/output.css' %}" rel="stylesheet">
      <style>
         .chart-container {
             position: relative;
@@ -257,33 +257,17 @@
             </div>
         </div>
 
-        <!-- Recent Records Table -->
-        {% comment %} <div class="mt-6 bg-zinc-800 rounded-lg shadow-2xl overflow-hidden border border-zinc-700">
-            <div class="px-6 py-5 border-b border-zinc-700 flex justify-between items-center">
-                <h2 class="text-xl font-semibold text-zinc-100">Recent Records</h2>
-                <a href="/view_all" class="text-sm text-blue-400 hover:text-blue-300 transition-colors duration-200">
-                    View all
-                </a>
-            </div>            
-        </div> {% endcomment %}
     </div>
-
-    <!-- JavaScript for Dashboard -->
     <script>
-        // Simulate real-time data updates
+
         function updateDashboard() {
-            console.log('Dashboard data refreshed');
+            // TODO: Fetch new data and update the dashboard elements
+             getdata();
+             fetchActivities();
         }
 
-        // Refresh dashboard every 30 seconds
-        setInterval(updateDashboard, 30000);
+        setInterval(updateDashboard, 2000);
 
-        // Initial load
-        window.addEventListener('DOMContentLoaded', function() {
-            console.log('Dashboard loaded');
-        });
-    </script>
-    <script>
         const activityContainer = document.querySelector('.space-y-4');
 
         // Fetch recent activities
@@ -330,9 +314,8 @@
 
         async function getdata() {
             try {
-                const response = await fetch('/api/get_stats/'); // Django API endpoint
+                const response = await fetch('/api/get_stats/');
                 const data = await response.json();
-                console.log(data); // Log the fetched data for debugging
                 document.getElementById('total_records').textContent = data.total_records;
                 document.getElementById('total_revenue').textContent = `₹${data.total_revenue.toFixed(2)}`;
                 document.getElementById('total_pending_amount').textContent = `₹${data.total_pending_amount.toFixed(2)}`;

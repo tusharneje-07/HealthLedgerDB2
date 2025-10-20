@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HealthLedger | Records</title>
+    {% load static %}
+    <link href="{% static 'css/output.css' %}" rel="stylesheet">
+    <style>
+        /* Spreadsheet-like resizer styles */
+        #recordsTable { position: relative; table-layout: fixed; }
+        #recordsTable th { position: relative; }
+        /* The resizer clickable area spans full table height and centers on the border */
+        .col-resizer {
+            position: absolute;
+            top: 0; /* will be adjusted via JS to align with header */
+            height: auto; /* set via JS to header height */
+            width: 18px; /* hit area */
+            margin-left: -9px;
+            cursor: col-resize;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            touch-action: none;
+            pointer-events: auto;
+        }
+        .col-resizer .bar {
+            width: 2px;
+            height: 40%;
+            background: rgba(255,255,255,0.95);
+            border-radius: 2px;
+            box-shadow: 0 0 6px rgba(0,0,0,0.45);
+            opacity: 0.75;
+        }
+        .col-resizer:hover .bar { background: rgba(255,255,255,1); transform: scaleX(1.05); }
+
+        /* Reduce resizer hit area on small screens to avoid obstructing content */
+        @media (max-width: 640px) {
+            .col-resizer { width: 12px; margin-left: -6px; }
+            .col-resizer .bar { width: 3px; }
+        }
+
+        /* Prevent text overlap during resize: show ellipsis instead of overlapping text */
+        #recordsTable th, #recordsTable td {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        /* Sticky filters and header inside the scroll container */
+        .controls-sticky { position: sticky; top: 0; z-index: 60; background: transparent; }
+    #filtersWrap { transition: max-height 220ms ease; overflow: hidden; }
+    /* collapsed state for filters - prefer class toggle for predictable behavior */
+    #filtersWrap.collapsed { max-height: 0 !important; }
+    #filtersWrap.expanded { max-height: 1200px; }
+    /* allow filter controls to wrap on small screens and align in row on md+ */
+    #filtersWrap .flex { flex-wrap: wrap; }
+        /* variable used to offset the sticky thead */
+        :root { --filters-height: 0px; }
+
+        /* Ensure the Show Stats button stays aligned to the right in the navbar */
+        #toggleStatsBtn { margin-left: auto; align-self: center; }
+
+        /* Progress bar styles */
+        #loadingProgressBar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 0%;
+            height: 2px;
+            background: linear-gradient(90deg, #3b82f6, #60a5fa);
+            transition: width 0.3s ease;
+            z-index: 100;
+            box-shadow: 0 0 5px rgba(59, 130, 246, 0.5);
+        }
+
+        /* Indeterminate progress bar animation */
+        #loadingProgressBar.indeterminate {
+            width: 100% !important;
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                #3b82f6 25%, 
+                #60a5fa 50%, 
+                #3b82f6 75%, 
+                transparent 100%
+            );
+            background-size: 200% 100%;
+            animation: progressBarSlide 1.5s ease-in-out infinite;
+            transition: none;
+        }
+
+        @keyframes progressBarSlide {
+            0% {
+                background-position: 200% 0;
+            }
+            100% {
+                background-position: -200% 0;
+            }
+        }
+
+        /* Percentage button at bottom right */
+        #percentageBtn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            min-width: 60px;
+            transition: all 0.3s ease;
+        }
+
+        /* Table container with fixed height and hidden scrollbars */
+        .table-container {
+            max-height: 450px;
+            overflow-y: auto;
+            overflow-x: auto;
+            position: relative;
+        }
+
+        /* Hide scrollbars for table container */
+        .table-container::-webkit-scrollbar {
+            display: none;
+        }
+        
+        .table-container {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+
+        /* Sticky header for table */
+        #recordsTable thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: #18181b;
+        }
+    </style>
+</head>
+<body class="bg-zinc-900 min-h-screen text-zinc-100">
+
+     <!-- Navbar -->
+    <nav class="bg-zinc-800 border-b border-zinc-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo -->
+                <div class="flex items-center">
+                    <div class="text-xl font-semibold text-zinc-100">
+                        HealthLedger
+                    </div>
+                </div>
+                
+                <!-- Navigation Links -->
+                <div class="hidden md:flex space-x-6">
+                    <a class="text-zinc-100 hover:text-zinc-300 transition-colors duration-200 font-medium">Dashboard</a>
+                    <a class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/view_all'" style="cursor: pointer;">Records</a>
+                    <a href="#" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/logout'">SleepOut</a>
+
+                </div>
+                
+                <!-- User Menu -->
+                <div class="flex items-center space-x-4">
+                    <button class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                        </svg>
+                    </button>
+                    <div class="flex items-center space-x-2">
+                        <div class="w-8 h-8 bg-zinc-700 rounded-full flex items-center justify-center text-sm font-medium">
+                            TN
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-8xl mx-auto px-12 py-3 sm:px-8 lg:px-8">
+        <div class="w-full flex flex-row justify-end">
+            <button id="toggleStatsBtn" type="button" aria-expanded="false"
+                class="inline-flex items-center gap-2 px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-100 hover:bg-zinc-700 focus:outline-none">
+                <!-- Eye (visible when stats are hidden -> button shows "Show Stats" + eye icon) -->
+                <span id="eyeIcon" class="inline-flex">
+                    <svg id="icon-eye" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-zinc-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                </span>
+                <!-- Eye-off (hidden by default) -->
+                <span id="eyeOffIcon" class="hidden">
+                    <svg id="icon-eye-off" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-zinc-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.477 0-8.268-2.943-9.542-7a10.06 10.06 0 012.223-3.607M6.1 6.1A9.965 9.965 0 0112 5c4.477 0 8.268 2.943 9.542 7a9.996 9.996 0 01-4.473 5.197M3 3l18 18" />
+                    </svg>
+                </span>
+                <span id="toggleStatsText">Show Stats</span>
+        </button>
+        </div>
+        
+
+        
+        
+        
+            <!-- Stats Grid (hidden by default, toggled by button) -->
+        
+        <div id="statsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 mb-2 mt-2">
+            
+            <!-- Stat Card 1 -->
+            <div class="bg-zinc-800 rounded-lg p-6 border border-zinc-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-zinc-400">Total Records</p>
+                        <p class="text-3xl font-semibold text-zinc-100 mt-2" id="total_records">----</p>
+                        <p class="text-xs text-green-400 mt-2">+12% from last month</p>
+                    </div>
+                    <div class="w-12 h-12 bg-zinc-700 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stat Card 2 -->
+            <div class="bg-zinc-800 rounded-lg p-6 border border-zinc-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-zinc-400">Total Revenue</p>
+                        <p class="text-3xl font-semibold text-zinc-100 mt-2" id="total_revenue">----</p>
+                        <p class="text-xs text-green-400 mt-2">+8% from last month</p>
+                    </div>
+                    <div class="w-12 h-12 bg-zinc-700 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stat Card 3 -->
+            <div class="bg-zinc-800 rounded-lg p-6 border border-zinc-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-zinc-400">Total Pending Amount</p>
+                        <p class="text-3xl font-semibold text-zinc-100 mt-2" id="total_pending_amount">----</p>
+                        <p class="text-xs text-yellow-400 mt-2">Requires attention</p>
+                    </div>
+                    <div class="w-12 h-12 bg-zinc-700 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stat Card 4 -->
+            <div class="bg-zinc-800 rounded-lg p-6 border border-zinc-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-zinc-400">Completed</p>
+                        <p class="text-3xl font-semibold text-zinc-100 mt-2" id="total_paid_customers">----</p>
+                        <p class="text-xs text-green-400 mt-2" id="completion_rate">88.6% completion rate</p>
+                    </div>
+                    <div class="w-12 h-12 bg-zinc-700 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Recent Records Table -->
+        <div class="mt-2 bg-zinc-800 rounded-lg shadow-2xl overflow-hidden border border-zinc-700">
+            <div id="filtersContainer" class="flex flex-row items-end gap-4 p-4 border-b border-zinc-700 bg-zinc-800">
+
+                <!-- Page size selector -->
+                <div class="flex flex-col w-full">
+                    <label for="pageSizeSelect" class="text-zinc-400 text-sm mb-1">Show</label>
+                    <select id="pageSizeSelect" class="px-3 py-2 rounded-lg bg-zinc-700 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full" onchange="onPageSizeChanged()">
+                        <option value="10">10</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                        <option value="250">250</option>
+                        <option value="500">500</option>
+                        <option value="1000">1000</option>
+                        <option value="all">All</option>
+                    </select>
+                </div>
+                
+                <!-- Search -->
+                <div class="flex flex-col w-full md:flex-1">
+                    <label for="searchInput" class="text-zinc-400 text-sm mb-1">Search</label>
+                    <div class="relative">
+                    <svg class="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"></path>
+                    </svg>
+                    <input id="searchInput" type="text" placeholder="Search records, invoice, name..." class="pl-10 pr-4 py-2 rounded-lg bg-zinc-700 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-auto md:flex-1" onkeyup="applyFilters()">
+                    </div>
+                </div>
+
+                <!-- Date range -->
+                <div class="flex gap-3 w-full md:w-auto">
+                    <div class="flex flex-col">
+                    <label for="dateFrom" class="text-zinc-400 text-sm mb-1">From</label>
+                    <input id="dateFrom" type="date" class="px-3 py-2 rounded-lg bg-zinc-700 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-40" onchange="applyFilters()">
+                    </div>
+                    <div class="flex flex-col">
+                    <label for="dateTo" class="text-zinc-400 text-sm mb-1">To</label>
+                    <input id="dateTo" type="date" class="px-3 py-2 rounded-lg bg-zinc-700 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-40" onchange="applyFilters()">
+                    </div>
+                </div>
+
+                <!-- Status toggles: label above on small screens, inline on md+ -->
+                <div class="flex flex-col md:flex-row md:items-center md:gap-4">
+                    <div class="flex flex-col">
+                        <label class="text-zinc-400 text-sm mb-1">Status</label>
+                        <div class="flex items-center gap-2">
+                            <div class="flex items-center">
+                                <input id="filterPaid" type="checkbox" class="hidden peer" onchange="applyFilters()">
+                                <label for="filterPaid" class="cursor-pointer px-4 py-2 rounded-full border border-green-600 text-green-400 bg-transparent transition-all duration-150 peer-checked:bg-green-600 peer-checked:text-white peer-checked:border-transparent">
+                                    Paid
+                                </label>
+                            </div>
+
+                            <div class="flex items-center">
+                                <input id="filterPending" type="checkbox" class="hidden peer" onchange="applyFilters()">
+                                <label for="filterPending" class="cursor-pointer px-4 py-2 rounded-full border border-red-600 text-red-400 bg-transparent transition-all duration-150 peer-checked:bg-red-600 peer-checked:text-white peer-checked:border-transparent">
+                                    Pending
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Clear -->
+                <div class="flex items-center md:pl-2">
+                    <button type="button" onclick="clearFilters()" class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-sm text-zinc-100">Clear</button>
+                </div>
+
+
+            </div>
+
+            <div class="table-container">
+                <table id="recordsTable" class="w-full" style="table-layout: fixed; position: relative;">
+                    <!-- Progress bar at the top of table -->
+                    <div id="loadingProgressBar" style="display: none;"></div>
+                    
+                    <thead class="bg-zinc-900/50 border-b border-zinc-700">
+                    <tr>
+                        {% comment %} <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(0)">Record # &#8597;</th> {% endcomment %}
+                        <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(0)">UID &#8597;</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(1)">Invoice # &#8597;</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(2)">Customer &#8597;</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(3)">Date &#8597;</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(4)">Amount &#8597;</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(5)">Paid Amount &#8597;</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(6)">Remaining &#8597;</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider cursor-pointer" onclick="sortTable(7)">Status &#8597;</th>
+                        <th class="px-6 py-4 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                    <tbody id="recordsTbody" class="divide-y divide-zinc-700">
+                    <!-- rows will be loaded via /api/records/ using JS (infinite scroll + search) -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Reset Column Width Button -->
+            <div class="p-4 border-t border-zinc-700 flex justify-end">
+                <button id="resetColumnWidthBtn" type="button" onclick="resetColumnWidths()" 
+                    class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-sm text-zinc-100 transition-colors duration-200 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Reset Column Width
+                </button>
+            </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Percentage Button (Bottom Right Corner) -->
+    <button id="percentageBtn" class="hidden px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-lg font-semibold text-sm">
+        0%
+    </button>
+
+        <!-- JavaScript for Dashboard -->
+        <script>
+            // ============================================================
+            // Utility Functions
+            // ============================================================
+            
+            function debounce(fn, wait) {
+                let timeout;
+                return function(...args) {
+                    clearTimeout(timeout);
+                    timeout = setTimeout(() => fn.apply(this, args), wait);
+                };
+            }
+
+            function parseDateFlexible(dateStr) {
+                if (!dateStr) return NaN;
+                
+                // Try ISO format first
+                let date = new Date(dateStr);
+                if (!isNaN(date)) return date;
+                
+                // Try DD-MM-YYYY or DD/MM/YYYY
+                const parts = dateStr.trim().split(/[-\/\.]/);
+                if (parts.length >= 3) {
+                    const day = parseInt(parts[0], 10);
+                    const month = parseInt(parts[1], 10) - 1;
+                    const year = parseInt(parts[2], 10);
+                    if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+                        return new Date(year, month, day);
+                    }
+                }
+                return new Date(NaN);
+            }
+
+            function formatTime(datetimeStr) {
+                const activityTime = new Date(datetimeStr);
+                const now = new Date();
+                const diff = Math.floor((now - activityTime) / 1000);
+
+                if (diff < 60) return `${diff} seconds ago`;
+                if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`;
+                if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
+                return `${Math.floor(diff / 86400)} days ago`;
+            }
+
+            // ============================================================
+            // Dashboard Data Functions
+            // ============================================================
+            
+            function updateDashboard() {
+                console.log('Dashboard data refreshed');
+            }
+
+            async function fetchStats() {
+                try {
+                    const response = await fetch('/api/get_stats/');
+                    const data = await response.json();
+                    console.log(data);
+
+                    const elements = {
+                        total_records: document.getElementById('total_records'),
+                        total_revenue: document.getElementById('total_revenue'),
+                        total_pending_amount: document.getElementById('total_pending_amount'),
+                        total_paid_customers: document.getElementById('total_paid_customers'),
+                        completed: document.getElementById('completed'),
+                        pending: document.getElementById('pending')
+                    };
+
+                    if (elements.total_records) elements.total_records.textContent = data.total_records;
+                    if (elements.total_revenue) elements.total_revenue.textContent = `₹${Number(data.total_revenue || 0).toFixed(2)}`;
+                    if (elements.total_pending_amount) elements.total_pending_amount.textContent = `₹${Number(data.total_pending_amount || 0).toFixed(2)}`;
+                    if (elements.total_paid_customers) elements.total_paid_customers.textContent = data.total_paid_customers;
+                    if (elements.completed) elements.completed.textContent = data.total_paid_customers;
+                    if (elements.pending) elements.pending.textContent = String(Number(data.total_records || 0) - Number(data.total_paid_customers || 0));
+                } catch (error) {
+                    console.error('Error fetching stats:', error);
+                    throw error;
+                }
+            }
+
+            async function fetchActivities() {
+                const activityContainer = document.querySelector('.space-y-4');
+                if (!activityContainer) return;
+
+                try {
+                    const response = await fetch('/api/recent-activity/');
+                    const data = await response.json();
+                    
+                    activityContainer.innerHTML = '';
+                    const colorClasses = ['bg-green-400', 'bg-blue-400', 'bg-yellow-400', 'bg-purple-400', 'bg-red-400'];
+
+                    data.activities.forEach((activity, index) => {
+                        const activityHTML = `
+                            <div class="flex items-start space-x-4">
+                                <div class="w-2 h-2 ${colorClasses[index % colorClasses.length]} rounded-full mt-2"></div>
+                                <div class="flex-1">
+                                    <p class="text-sm text-zinc-100">${activity.log_name}</p>
+                                    <p class="text-xs text-zinc-400 mt-1">${activity.log_desc}</p>
+                                    <p class="text-xs text-zinc-500 mt-1">${formatTime(activity.log_date_time)}</p>
+                                </div>
+                            </div>
+                        `;
+                        activityContainer.innerHTML += activityHTML;
+                    });
+                } catch (error) {
+                    console.error('Error fetching activities:', error);
+                }
+            }
+
+            // ============================================================
+            // Table Records Management
+            // ============================================================
+            
+            (function initRecordsTable() {
+                const tbody = document.getElementById('recordsTbody');
+                const searchInput = document.getElementById('searchInput');
+                const loadingProgressBar = document.getElementById('loadingProgressBar');
+                const percentageBtn = document.getElementById('percentageBtn');
+
+                const CHUNKS = 4;
+                let currentFilters = { search: '', date_from: '', date_to: '', status: '' };
+                let loading = false;
+                let lastLoadedFilterKey = null;
+                let lastLoadedTotal = 0;
+
+                function createTableCell(text, className = 'px-6 py-4 whitespace-nowrap text-sm text-zinc-400') {
+                    const cell = document.createElement('td');
+                    cell.className = className;
+                    cell.textContent = text;
+                    return cell;
+                }
+
+                function renderRow(record) {
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-zinc-700/30 transition-colors duration-150';
+
+                    tr.appendChild(createTableCell(record.uid, 'px-6 py-4 whitespace-nowrap text-sm font-medium text-zinc-100'));
+                    tr.appendChild(createTableCell(record.invoiceNum, 'px-6 py-4 whitespace-nowrap text-sm font-medium text-zinc-100'));
+                    tr.appendChild(createTableCell(record.username, 'px-6 py-4 whitespace-nowrap text-sm font-medium text-zinc-100'));
+                    tr.appendChild(createTableCell(record.date, 'px-6 py-4 whitespace-nowrap text-sm text-zinc-400'));
+                    tr.appendChild(createTableCell(`₹${Number(record.amount).toFixed(2)}`, 'px-6 py-4 whitespace-nowrap text-sm text-zinc-400'));
+                    tr.appendChild(createTableCell(`₹${Number(record.paidAmount).toFixed(2)}`, 'px-6 py-4 whitespace-nowrap text-sm text-zinc-400'));
+                    tr.appendChild(createTableCell(`₹${Number(record.remainingAmount).toFixed(2)}`, 'px-6 py-4 whitespace-nowrap text-sm text-zinc-400'));
+
+                    const statusTd = document.createElement('td');
+                    statusTd.className = 'px-6 py-4 whitespace-nowrap text-sm';
+                    const statusSpan = document.createElement('span');
+                    statusSpan.className = record.remark === 'Paid' 
+                        ? 'px-3 py-1 rounded-lg text-xs font-medium bg-green-900/40 text-green-400'
+                        : 'px-3 py-1 rounded-lg text-xs font-medium bg-red-900/40 text-red-400';
+                    statusSpan.textContent = record.remark === 'Paid' ? record.remark : 'Pending';
+                    statusTd.appendChild(statusSpan);
+                    tr.appendChild(statusTd);
+
+                    const actionTd = document.createElement('td');
+                    actionTd.className = 'px-6 py-4 whitespace-nowrap text-sm';
+                    const actionLink = document.createElement('a');
+                    actionLink.className = 'px-3 py-1 rounded-lg text-xs font-medium bg-blue-900/40 text-blue-400';
+                    actionLink.href = record.see_details || `/print/${record.invoiceNum}`;
+                    actionLink.target = '_blank';
+                    actionLink.textContent = 'See Details';
+                    actionTd.appendChild(actionLink);
+                    tr.appendChild(actionTd);
+
+                    return tr;
+                }
+
+                function showProgress(percent, indeterminate = false) {
+                    if (loadingProgressBar) {
+                        loadingProgressBar.style.display = 'block';
+                        
+                        if (indeterminate) {
+                            loadingProgressBar.classList.add('indeterminate');
+                            loadingProgressBar.style.width = '100%';
+                        } else {
+                            loadingProgressBar.classList.remove('indeterminate');
+                            loadingProgressBar.style.width = `${percent}%`;
+                        }
+                    }
+                    if (percentageBtn && !indeterminate) {
+                        percentageBtn.classList.remove('hidden');
+                        percentageBtn.textContent = `${percent}%`;
+                    } else if (percentageBtn && indeterminate) {
+                        percentageBtn.classList.add('hidden');
+                    }
+                }
+
+                function hideProgress() {
+                    setTimeout(() => {
+                        if (loadingProgressBar) {
+                            loadingProgressBar.style.display = 'none';
+                            loadingProgressBar.style.width = '0%';
+                            loadingProgressBar.classList.remove('indeterminate');
+                        }
+                        if (percentageBtn) {
+                            percentageBtn.classList.add('hidden');
+                        }
+                    }, 500);
+                }
+
+                function buildParams(extra = {}) {
+                    const params = new URLSearchParams();
+                    if (extra.size !== undefined) params.set('size', extra.size);
+                    if (extra.offset !== undefined) params.set('offset', extra.offset);
+                    if (currentFilters.search) params.set('search', currentFilters.search);
+                    if (currentFilters.date_from) params.set('date_from', currentFilters.date_from);
+                    if (currentFilters.date_to) params.set('date_to', currentFilters.date_to);
+                    if (currentFilters.status) params.set('status', currentFilters.status);
+                    return params.toString();
+                }
+
+                async function fetchTotalCount() {
+                    try {
+                        const params = new URLSearchParams();
+                        params.set('size', 1);
+                        params.set('offset', 0);
+                        if (currentFilters.search) params.set('search', currentFilters.search);
+                        if (currentFilters.date_from) params.set('date_from', currentFilters.date_from);
+                        if (currentFilters.date_to) params.set('date_to', currentFilters.date_to);
+                        if (currentFilters.status) params.set('status', currentFilters.status);
+
+                        const res = await fetch(`/api/records/?${params.toString()}`);
+                        if (!res.ok) return null;
+
+                        const headerTotal = res.headers.get('X-Total-Count') || res.headers.get('x-total-count');
+                        if (headerTotal) return parseInt(headerTotal, 10);
+
+                        const json = await res.json();
+                        if (json && (json.total || json.total_records || json.count)) {
+                            return json.total || json.total_records || json.count;
+                        }
+                    } catch (e) {
+                        console.warn('Could not fetch total count via header/json:', e);
+                    }
+
+                    try {
+                        const params = new URLSearchParams();
+                        if (currentFilters.search) params.set('search', currentFilters.search);
+                        if (currentFilters.date_from) params.set('date_from', currentFilters.date_from);
+                        if (currentFilters.date_to) params.set('date_to', currentFilters.date_to);
+                        if (currentFilters.status) params.set('status', currentFilters.status);
+
+                        const res = await fetch(`/api/records/count/?${params.toString()}`);
+                        if (res.ok) {
+                            const json = await res.json();
+                            if (json && (json.total || json.count)) {
+                                return json.total || json.count;
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('Could not fetch count from dedicated endpoint:', e);
+                    }
+
+                    return null;
+                }
+
+                async function loadInChunks() {
+                    if (loading) return;
+                    loading = true;
+                    tbody.innerHTML = '';
+                    
+                    // Show indeterminate progress bar immediately
+                    showProgress(0, true);
+
+                    const pageSize = getSelectedPageSize();
+
+                    if (pageSize !== 'all' && Number.isFinite(pageSize)) {
+                        try {
+                            const params = buildParams({ size: pageSize, offset: 0 });
+                            const res = await fetch(`/api/records/?${params}`);
+                            if (!res.ok) throw new Error('fetch failed');
+
+                            const data = await res.json();
+                            const records = Array.isArray(data) ? data : (data.results || []);
+                            records.forEach(r => tbody.appendChild(renderRow(r)));
+
+                            showProgress(100, false);
+                            setTimeout(hideProgress, 500);
+                            loading = false;
+
+                            lastLoadedFilterKey = JSON.stringify(currentFilters) + '::' + String(pageSize);
+                            lastLoadedTotal = records.length;
+                            return;
+                        } catch (e) {
+                            console.error('Page-size fetch error', e);
+                        }
+                    }
+
+                    let total = await fetchTotalCount();
+                    if (!total) {
+                        try {
+                            const firstParams = buildParams({ size: 50, offset: 0 });
+                            const res = await fetch(`/api/records/?${firstParams}`);
+                            const data = await res.json();
+
+                            if (Array.isArray(data)) {
+                                data.forEach(r => tbody.appendChild(renderRow(r)));
+                                showProgress(100, false);
+                                setTimeout(hideProgress, 800);
+                                loading = false;
+
+                                lastLoadedFilterKey = JSON.stringify(currentFilters);
+                                lastLoadedTotal = data.length;
+                                return;
+                            }
+                        } catch (e) {
+                            console.error('Fallback fetch error:', e);
+                        }
+                    }
+
+                    if (!total) total = 0;
+
+                    const chunkSize = total > 0 ? Math.ceil(total / CHUNKS) : 0;
+
+                    if (total === 0 || chunkSize === 0) {
+                        showProgress(100, false);
+                        setTimeout(hideProgress, 500);
+                        loading = false;
+                        return;
+                    }
+
+                    let loaded = 0;
+                    const currentKey = JSON.stringify(currentFilters);
+
+                    if (lastLoadedFilterKey && lastLoadedFilterKey === currentKey && lastLoadedTotal > 0) {
+                        showProgress(100, false);
+                        setTimeout(hideProgress, 700);
+                        loading = false;
+                        return;
+                    }
+
+                    lastLoadedFilterKey = currentKey;
+                    lastLoadedTotal = 0;
+
+                    // Switch to determinate progress now that we know the total
+                    showProgress(0, false);
+
+                    for (let i = 0; i < CHUNKS; i++) {
+                        const offset = i * chunkSize;
+                        const size = Math.min(chunkSize, total - offset);
+                        if (size <= 0) break;
+
+                        try {
+                            const params = buildParams({ size, offset });
+                            const res = await fetch(`/api/records/?${params}`);
+                            if (!res.ok) throw new Error('fetch failed');
+
+                            const data = await res.json();
+                            if (Array.isArray(data) && data.length > 0) {
+                                data.forEach(r => tbody.appendChild(renderRow(r)));
+                                loaded += data.length;
+                            }
+                        } catch (e) {
+                            console.error('Chunk load error', e);
+                        }
+
+                        const percent = Math.min(100, Math.round((loaded / total) * 100));
+                        showProgress(percent, false);
+                        await new Promise(resolve => setTimeout(resolve, 250));
+                    }
+
+                    showProgress(100, false);
+                    setTimeout(hideProgress, 700);
+                    loading = false;
+
+                    if (total > 0) lastLoadedTotal = total;
+                }
+
+                const onSearch = debounce(function() {
+                    currentFilters.search = searchInput.value.trim();
+                    loadInChunks();
+                }, 300);
+
+                searchInput.addEventListener('input', onSearch);
+
+                window.addEventListener('records:filtersChanged', function(e) {
+                    const data = e.detail || {};
+                    currentFilters.search = data.search || '';
+                    currentFilters.date_from = data.date_from || '';
+                    currentFilters.date_to = data.date_to || '';
+                    currentFilters.status = data.status || '';
+
+                    if (searchInput.value.trim() !== currentFilters.search) {
+                        searchInput.value = currentFilters.search;
+                    }
+                    loadInChunks();
+                });
+
+                window.addEventListener('records:pageSizeChanged', function() {
+                    lastLoadedFilterKey = null;
+                    lastLoadedTotal = 0;
+                    loadInChunks();
+                });
+
+                document.addEventListener('DOMContentLoaded', function() {
+                    currentFilters.search = document.getElementById('searchInput').value.trim();
+                    currentFilters.date_from = document.getElementById('dateFrom').value || '';
+                    currentFilters.date_to = document.getElementById('dateTo').value || '';
+
+                    const filterPaid = document.getElementById('filterPaid').checked;
+                    const filterPending = document.getElementById('filterPending').checked;
+                    currentFilters.status = (filterPaid && !filterPending) ? 'paid' : (filterPending && !filterPaid ? 'pending' : '');
+
+                    loadInChunks();
+                });
+            })();
+
+            // ============================================================
+            // Page Size Control
+            // ============================================================
+            
+            function getSelectedPageSize() {
+                const select = document.getElementById('pageSizeSelect');
+                if (!select) return 50;
+
+                const value = select.value;
+                if (value === 'all') return 'all';
+
+                const number = parseInt(value, 10);
+                return isNaN(number) ? 50 : number;
+            }
+
+            function onPageSizeChanged() {
+                const event = new CustomEvent('records:pageSizeChanged', {
+                    detail: { page_size: getSelectedPageSize() }
+                });
+                window.dispatchEvent(event);
+            }
+
+            // ============================================================
+            // Filtering and Sorting
+            // ============================================================
+            
+            const TOTAL_COLUMNS = 10;
+            let sortDirections = Array.from({ length: TOTAL_COLUMNS }, () => true);
+
+            function applyFilters() {
+                const search = document.getElementById("searchInput").value.trim();
+                const fromVal = document.getElementById("dateFrom").value;
+                const toVal = document.getElementById("dateTo").value;
+                const filterPaid = document.getElementById("filterPaid").checked;
+                const filterPending = document.getElementById("filterPending").checked;
+
+                let status = '';
+                if (filterPaid && !filterPending) status = 'paid';
+                else if (!filterPaid && filterPending) status = 'pending';
+
+                const event = new CustomEvent('records:filtersChanged', {
+                    detail: { search, date_from: fromVal, date_to: toVal, status }
+                });
+                window.dispatchEvent(event);
+            }
+
+            function clearFilters() {
+                document.getElementById("searchInput").value = "";
+                document.getElementById("dateFrom").value = "";
+                document.getElementById("dateTo").value = "";
+                document.getElementById("filterPaid").checked = false;
+                document.getElementById("filterPending").checked = false;
+                applyFilters();
+            }
+
+            function sortTable(colIdx) {
+                const table = document.getElementById("recordsTable");
+                const tbody = table.tBodies[0];
+                const rows = Array.from(tbody.rows).filter(r => r.style.display !== "none");
+                const asc = sortDirections[colIdx];
+
+                rows.sort((a, b) => {
+                    let valA = a.cells[colIdx] ? a.cells[colIdx].textContent.trim() : "";
+                    let valB = b.cells[colIdx] ? b.cells[colIdx].textContent.trim() : "";
+
+                    // Date column (index 3)
+                    if (colIdx === 3) {
+                        let dateA = parseDateFlexible(valA);
+                        let dateB = parseDateFlexible(valB);
+                        if (!isNaN(dateA) && !isNaN(dateB)) {
+                            return asc ? dateA - dateB : dateB - dateA;
+                        }
+                    }
+
+                    // Status column (index 7)
+                    if (colIdx === 7) {
+                        let statusA = valA.toLowerCase().includes("paid") ? "Paid" : "Pending";
+                        let statusB = valB.toLowerCase().includes("paid") ? "Paid" : "Pending";
+                        if (statusA !== statusB) {
+                            return asc ? (statusA === "Paid" ? -1 : 1) : (statusA === "Paid" ? 1 : -1);
+                        }
+                        // If same status, fall through to text comparison
+                    }
+
+                    // Customer column (index 2) or any text column
+                    if (colIdx === 2 || colIdx === 0 || colIdx === 1) {
+                        return asc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                    }
+
+                    // Numeric columns (Amount, Paid Amount, Remaining)
+                    let numA = parseFloat(valA.replace(/[^\d.-]/g, ''));
+                    let numB = parseFloat(valB.replace(/[^\d.-]/g, ''));
+                    if (!isNaN(numA) && !isNaN(numB)) {
+                        return asc ? numA - numB : numB - numA;
+                    }
+
+                    // Default text comparison
+                    return asc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                });
+
+                rows.forEach(row => tbody.appendChild(row));
+                sortDirections[colIdx] = !asc;
+            }
+
+            // ============================================================
+            // Filters Height Management
+            // ============================================================
+            
+            (function initFiltersHeight() {
+                const filtersWrap = document.getElementById('filtersWrap');
+                const filtersContainer = document.getElementById('filtersContainer');
+                if (!filtersWrap || !filtersContainer) return;
+
+                function updateFiltersHeight() {
+                    try {
+                        const rect = filtersContainer.getBoundingClientRect();
+                        document.documentElement.style.setProperty('--filters-height', rect.height + 'px');
+                    } catch (e) {
+                        console.warn('Failed to update filters height:', e);
+                    }
+                }
+
+                requestAnimationFrame(updateFiltersHeight);
+                window.addEventListener('resize', updateFiltersHeight);
+
+                const scrollContainer = document.querySelector('.overflow-x-auto');
+                if (scrollContainer) {
+                    scrollContainer.addEventListener('scroll', updateFiltersHeight);
+                }
+
+                setTimeout(updateFiltersHeight, 160);
+            })();
+
+            // ============================================================
+            // Column Resizer
+            // ============================================================
+            
+            document.addEventListener('DOMContentLoaded', function() {
+                (function tryInitColumnResize() {
+                    const table = document.getElementById('recordsTable');
+                    if (!table) {
+                        setTimeout(tryInitColumnResize, 200);
+                        return;
+                    }
+
+                    const container = table.closest('.overflow-x-auto') || table.parentElement;
+                    if (container && getComputedStyle(container).position === 'static') {
+                        container.style.position = 'relative';
+                    }
+
+                    const thead = table.querySelector('thead');
+                    if (!thead) return;
+
+                    const headerRow = thead.querySelector('tr');
+                    if (!headerRow) return;
+
+                    const STORAGE_KEY = 'healthledger_col_widths_v1';
+                    const MIN_WIDTH = 40;
+
+                    function ensureColgroup() {
+                        let colgroup = table.querySelector('colgroup');
+                        const colsNeeded = headerRow.cells.length;
+
+                        if (!colgroup) {
+                            colgroup = document.createElement('colgroup');
+                            for (let i = 0; i < colsNeeded; i++) {
+                                colgroup.appendChild(document.createElement('col'));
+                            }
+                            table.insertBefore(colgroup, table.firstChild);
+                        } else if (colgroup.children.length < colsNeeded) {
+                            for (let i = colgroup.children.length; i < colsNeeded; i++) {
+                                colgroup.appendChild(document.createElement('col'));
+                            }
+                        }
+                        return colgroup;
+                    }
+
+                    const colgroup = ensureColgroup();
+                    console.log('col-resize: init');
+
+                    let widths = {};
+                    try {
+                        widths = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+                    } catch (e) {
+                        widths = {};
+                    }
+
+                    function clearResizers() {
+                        (headerRow._colResizers || []).forEach(r => r.remove());
+                        headerRow._colResizers = [];
+                    }
+
+                    function createResizers() {
+                        clearResizers();
+                        const cols = Array.from(colgroup.children);
+                        const colCount = cols.length;
+
+                        for (let i = 0; i < colCount; i++) {
+                            const col = cols[i];
+                            if (widths[i]) {
+                                col.style.width = widths[i] + 'px';
+                            } else {
+                                const th = headerRow.cells[i];
+                                const measured = th ? th.getBoundingClientRect().width : col.getBoundingClientRect().width;
+                                if (measured && measured > 0) {
+                                    col.style.width = Math.max(MIN_WIDTH, Math.round(measured)) + 'px';
+                                }
+                            }
+                        }
+
+                        if (getComputedStyle(headerRow).position === 'static') {
+                            headerRow.style.position = 'relative';
+                        }
+
+                        headerRow._colResizers = headerRow._colResizers || [];
+
+                        for (let i = 0; i < colCount - 1; i++) {
+                            const resizer = document.createElement('div');
+                            resizer.className = 'col-resizer';
+                            resizer.dataset.leftIndex = i;
+
+                            const bar = document.createElement('div');
+                            bar.className = 'bar';
+                            resizer.appendChild(bar);
+
+                            resizer.addEventListener('mousedown', onPointerDown);
+                            resizer.addEventListener('touchstart', function(e) {
+                                if (e.touches && e.touches[0]) onPointerDown(e.touches[0]);
+                                e.preventDefault();
+                            }, { passive: false });
+
+                            headerRow.appendChild(resizer);
+                            headerRow._colResizers.push(resizer);
+                        }
+
+                        positionResizers();
+                    }
+
+                    let dragging = null;
+
+                    function onPointerDown(e) {
+                        const target = e.target.closest('.col-resizer');
+                        if (!target) return;
+
+                        const leftIndex = parseInt(target.dataset.leftIndex, 10);
+                        const cols = Array.from(colgroup.children);
+                        const leftCol = cols[leftIndex];
+                        const rightCol = cols[leftIndex + 1];
+                        if (!leftCol || !rightCol) return;
+
+                        dragging = {
+                            leftIndex,
+                            startX: e.clientX,
+                            leftStart: Math.round(leftCol.getBoundingClientRect().width),
+                            rightStart: Math.round(rightCol.getBoundingClientRect().width)
+                        };
+
+                        document.documentElement.style.cursor = 'col-resize';
+                        document.addEventListener('mousemove', onPointerMove);
+                        document.addEventListener('mouseup', onPointerUp);
+                        document.addEventListener('touchmove', onTouchMove, { passive: false });
+                        document.addEventListener('touchend', onPointerUp);
+                    }
+
+                    function onTouchMove(e) {
+                        if (e.touches && e.touches[0]) onPointerMove(e.touches[0]);
+                    }
+
+                    function onPointerMove(e) {
+                        if (!dragging) return;
+
+                        const dx = e.clientX - dragging.startX;
+                        const cols = Array.from(colgroup.children);
+                        const leftCol = cols[dragging.leftIndex];
+                        const rightCol = cols[dragging.leftIndex + 1];
+                        if (!leftCol || !rightCol) return;
+
+                        let newLeft = Math.max(MIN_WIDTH, Math.round(dragging.leftStart + dx));
+                        let newRight = Math.max(MIN_WIDTH, Math.round(dragging.rightStart - dx));
+
+                        if (newRight < MIN_WIDTH) {
+                            const deficit = MIN_WIDTH - newRight;
+                            newRight = MIN_WIDTH;
+                            newLeft = Math.max(MIN_WIDTH, newLeft - deficit);
+                        }
+
+                        leftCol.style.width = newLeft + 'px';
+                        rightCol.style.width = newRight + 'px';
+
+                        widths[dragging.leftIndex] = newLeft;
+                        widths[dragging.leftIndex + 1] = newRight;
+
+                        positionResizers();
+
+                        if (e.cancelable) e.preventDefault();
+                    }
+
+                    function onPointerUp() {
+                        if (!dragging) return;
+
+                        try {
+                            localStorage.setItem(STORAGE_KEY, JSON.stringify(widths));
+                        } catch (e) {
+                            console.warn('Failed to save column widths:', e);
+                        }
+
+                        dragging = null;
+                        document.documentElement.style.cursor = '';
+                        document.removeEventListener('mousemove', onPointerMove);
+                        document.removeEventListener('mouseup', onPointerUp);
+                        document.removeEventListener('touchmove', onTouchMove);
+                        document.removeEventListener('touchend', onPointerUp);
+                    }
+
+                    function positionResizers() {
+                        const cols = Array.from(colgroup.children);
+                        for (let i = 0; i < cols.length; i++) {
+                            try {
+                                widths[i] = Math.round(cols[i].getBoundingClientRect().width);
+                            } catch (e) {
+                                console.warn('Failed to measure column width:', e);
+                            }
+                        }
+
+                        const resizers = headerRow._colResizers || [];
+                        const headerRect = headerRow.getBoundingClientRect();
+                        const headerCells = headerRow.cells || headerRow.querySelectorAll('th,td') || [];
+
+                        for (let i = 0; i < resizers.length; i++) {
+                            const resizer = resizers[i];
+                            const leftIndex = parseInt(resizer.dataset.leftIndex, 10);
+                            const cell = headerCells[leftIndex];
+                            if (!cell) continue;
+
+                            const cellRect = cell.getBoundingClientRect();
+                            const left = Math.round(cellRect.right - headerRect.left);
+                            const offset = Math.round(resizer.offsetWidth / 2) || 9;
+
+                            resizer.style.left = (left - offset) + 'px';
+                            resizer.style.top = '0px';
+                            resizer.style.height = Math.round(headerRect.height) + 'px';
+                        }
+                    }
+
+                    createResizers();
+                    positionResizers();
+
+                    const mutationObserver = new MutationObserver(() => {
+                        ensureColgroup();
+                        createResizers();
+                        positionResizers();
+                    });
+                    mutationObserver.observe(headerRow, { childList: true, subtree: true });
+
+                    window.addEventListener('resize', positionResizers);
+                    container.addEventListener('scroll', positionResizers);
+
+                    let repositionTimer = null;
+                    const debounceReposition = () => {
+                        clearTimeout(repositionTimer);
+                        repositionTimer = setTimeout(positionResizers, 120);
+                    };
+
+                    const tableMutationObserver = new MutationObserver(debounceReposition);
+                    tableMutationObserver.observe(table, {
+                        childList: true,
+                        subtree: true,
+                        attributes: true
+                    });
+                })();
+            });
+
+            // ============================================================
+            // Reset Column Width Function
+            // ============================================================
+            
+            function resetColumnWidths() {
+                const STORAGE_KEY = 'healthledger_col_widths_v1';
+                
+                // Clear saved column widths from localStorage
+                localStorage.removeItem(STORAGE_KEY);
+                
+                // Reload the page to apply default widths
+                window.location.reload();
+            }
+
+            // ============================================================
+            // Stats Toggle
+            // ============================================================
+            
+            (function initStatsToggle() {
+                const btn = document.getElementById('toggleStatsBtn');
+                const grid = document.getElementById('statsGrid');
+                const text = document.getElementById('toggleStatsText');
+                const eyeIcon = document.getElementById('eyeIcon');
+                const eyeOffIcon = document.getElementById('eyeOffIcon');
+
+                const stored = localStorage.getItem('healthledger_show_stats');
+                const show = stored ? stored === '1' : false;
+
+                function applyState(visible) {
+                    if (visible) {
+                        if (grid) grid.classList.remove('hidden');
+                        if (text) text.textContent = 'Hide Stats';
+                        if (eyeIcon) eyeIcon.classList.add('hidden');
+                        if (eyeOffIcon) eyeOffIcon.classList.remove('hidden');
+                        if (btn) btn.setAttribute('aria-expanded', 'true');
+                        localStorage.setItem('healthledger_show_stats', '1');
+                    } else {
+                        if (grid) grid.classList.add('hidden');
+                        if (text) text.textContent = 'Show Stats';
+                        if (eyeIcon) eyeIcon.classList.remove('hidden');
+                        if (eyeOffIcon) eyeOffIcon.classList.add('hidden');
+                        if (btn) btn.setAttribute('aria-expanded', 'false');
+                        localStorage.setItem('healthledger_show_stats', '0');
+                    }
+                }
+
+                applyState(show);
+                btn.addEventListener('click', function() {
+                    applyState(grid.classList.contains('hidden'));
+                });
+            })();
+
+            // ============================================================
+            // Initialization
+            // ============================================================
+            
+            setInterval(updateDashboard, 30000);
+
+            window.addEventListener('DOMContentLoaded', function() {
+                console.log('Dashboard loaded');
+                (async function() {
+                    try {
+                        await fetchStats();
+                    } catch (e) {
+                        console.warn('fetchStats failed', e);
+                    }
+                })();
+            });
+
+            document.addEventListener('DOMContentLoaded', function() {
+                (async function() {
+                    try {
+                        await fetchStats();
+                    } catch (e) {
+                        console.warn('fetchStats failed', e);
+                    }
+                })();
+            });
+        </script>
+</body>
+</html>

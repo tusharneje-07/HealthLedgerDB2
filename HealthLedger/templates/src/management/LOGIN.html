@@ -6,7 +6,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>HealthLedger | Login</title>
 	{% load static %}
-	<link href="{% static 'output.css' %}" rel="stylesheet">
+	<link href="{% static 'css/output.css' %}" rel="stylesheet">
 	<style>
 		/* small helper for the sliding forms */
 		.form-slider { transition: transform 300ms cubic-bezier(.2,.9,.2,1); }
@@ -132,9 +132,23 @@
             </form>
 		</div>
 		</div>
+	<!-- Auto-login Passkey Popup (shows when auth_token cookie exists) -->
+	<!-- Modal markup -->
+	<div id="passkey-modal-backdrop" class="hidden fixed inset-0 bg-black/50 z-50 items-center justify-center">
+		<div id="passkey-modal" class="bg-zinc-800 text-zinc-100 rounded-lg shadow-xl w-full max-w-md mx-auto p-6">
+			<div class="flex justify-between items-start">
+				<h3 class="text-lg font-semibold">Login with Passkey</h3>
+				<button id="passkey-modal-close" aria-label="Close" class="text-zinc-300 hover:text-zinc-100">✕</button>
+			</div>
+			<p id="passkey-modal-body" class="mt-4 text-sm text-zinc-300">Sign in using your device passkey.</p>
+			<div class="mt-6 flex gap-3">
+				<button id="passkey-modal-login" class="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded" onclick="document.getElementById('token_key_login').submit()">Login with Key</button>
+				<button id="passkey-modal-cancel" class="flex-1 px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded">Close</button>
+			</div>
+		</div>
+	</div>
 
-
-		<script>
+	<script>
 		// Toggle logic to slide between staff and patient forms
 		const btnStaff = document.getElementById('btn-staff');
 		const btnPatient = document.getElementById('btn-patient');
@@ -197,25 +211,7 @@
 				});
 			});
 		}
-	</script>
 
-	<!-- Auto-login Passkey Popup (shows when auth_token cookie exists) -->
-	<!-- Modal markup -->
-	<div id="passkey-modal-backdrop" class="hidden fixed inset-0 bg-black/50 z-50 items-center justify-center">
-		<div id="passkey-modal" class="bg-zinc-800 text-zinc-100 rounded-lg shadow-xl w-full max-w-md mx-auto p-6">
-			<div class="flex justify-between items-start">
-				<h3 class="text-lg font-semibold">Login with Passkey</h3>
-				<button id="passkey-modal-close" aria-label="Close" class="text-zinc-300 hover:text-zinc-100">✕</button>
-			</div>
-			<p id="passkey-modal-body" class="mt-4 text-sm text-zinc-300">Sign in using your device passkey.</p>
-			<div class="mt-6 flex gap-3">
-				<button id="passkey-modal-login" class="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded" onclick="document.getElementById('token_key_login').submit()">Login with Key</button>
-				<button id="passkey-modal-cancel" class="flex-1 px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded">Close</button>
-			</div>
-		</div>
-	</div>
-
-	<script>
 		// Simple helper to read cookie by name
 		function getCookie(name) {
 			const value = `; ${document.cookie}`;

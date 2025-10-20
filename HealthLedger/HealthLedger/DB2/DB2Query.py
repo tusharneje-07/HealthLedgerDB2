@@ -1,4 +1,6 @@
 import ibm_db
+from multiprocessing import Pool
+from functools import partial
 
 dsn_hostname = "localhost"
 dsn_uid = "db2admin"
@@ -43,5 +45,33 @@ def runSelectQuery(query):
         
         ibm_db.close(conn)
         return True, result
+    except Exception as e:
+        return False, str(e)
+
+def _execute_single_query(query):
+    """Helper function for parallel execution"""
+    return runSelectQuery(query)
+
+def runParallelQueries(queries, max_workers=None):
+    if not queries:
+        return True, []
+    
+    try:
+        # Use Pool for maximum performance
+        with Pool(processes=max_workers) as pool:
+            results = pool.map(_execute_single_query, queries)
+        
+        # Check if any query failed
+        failed = [r for r in results if not r[0]]
+        if failed:
+            errors = "; ".join([r[1] for r in failed])
+            return False, f"Some queries failed: {errors}"
+        
+        # Combine all results
+        combined = []
+        for success, data in results:
+            combined.extend(data)
+        
+        return True, combined
     except Exception as e:
         return False, str(e)
