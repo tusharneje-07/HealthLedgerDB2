@@ -4,11 +4,12 @@ from .DB2 import DB2Query
 from datetime import datetime
 from collections import defaultdict
 from django.utils import timezone
-import hashlib
+import hashlib, base64
 from django.contrib.sessions.models import Session
 
 
 # ===================================================== HIGH LEVEL VIEWS
+# ===================================================== MANAGEMENT VIEWS
 def DASH(request):
     auth_token = request.COOKIES.get('auth_token')
     if auth_token and request.session.get(f'{auth_token}_is_authenticated'):
@@ -131,6 +132,8 @@ def LOGIN(request):
         if key and auth_token == key:
             request.session[f'{auth_token}_is_authenticated'] = True
             return redirect('/')
+        else:
+            return render(request, 'src/management/LOGIN.html', {'error':True, 'error_msg': 'Invalid authentication key'})
         
 
     query = f"SELECT UID, NAME, EMAIL, PASSWORD, FLAG FROM AUTHENTICATION WHERE (UID = '{username}' OR EMAIL = '{username}') AND FLAG = '{user_type[0].upper()}'"
@@ -151,6 +154,8 @@ def LOGIN(request):
                 request.session[f'{auth_token}_user_flag'] = user.get('FLAG')
                 request.session[f'{auth_token}_is_authenticated'] = True
 
+                a,b = DB2Query.runQuery("UPDATE AUTHENTICATION SET KEY = '{}' WHERE EMAIL = '{}'".format(auth_token, user.get('EMAIL')))
+                
                 response = redirect('/')
                 response.set_cookie(
                     'auth_token',
@@ -168,10 +173,20 @@ def LOGIN(request):
                     secure=request.is_secure(),
                     samesite='Lax'
                 )
+                response.set_cookie(
+                    'user_type',
+                    'S',
+                    max_age=3 * 60 * 60,   # 3 hours in seconds
+                    httponly=False,
+                    secure=request.is_secure(),
+                    samesite='Lax'
+                )
                 return response
                 
             except Exception:
                 pass
+        else:
+            return render(request, 'src/management/LOGIN.html', {'error':True, 'error_msg': 'Invalid username or password'})
 
 def LOGOUT(request):
     auth_token = request.COOKIES.get('auth_token')
@@ -179,6 +194,154 @@ def LOGOUT(request):
         request.session[f'{auth_token}_is_authenticated'] = False
         
     return render(request, 'src/management/LOGOUT.html')
+# ===================================================== MANAGEMENT VIEWS
+
+# ===================================================== USER VIEWS
+def user_login(request):
+    if request.method == 'POST':
+        email = request.POST.get('email')
+        password = request.POST.get('password')
+
+        if request.POST.get('has_token_key'):
+            auth_token = request.COOKIES.get('auth_token')
+            has_token_key = request.POST.get('has_token_key')
+            key = request.session.get(has_token_key)
+            print("Auth key login triggered.",has_token_key, key, auth_token)
+            if key and auth_token == key:
+                request.session[f'{auth_token}_is_authenticated'] = True
+                
+                email = request.COOKIES.get('auth_token_name').replace('"','')
+                base64_encoded_email = base64.b64encode(email.encode()).decode()
+                return redirect('/user/'+base64_encoded_email+'/')
+            else:
+                return render(request, 'src/management/LOGIN.html', {'error': 'Invalid user authentication key'})
+        
+        query = f"SELECT UID, NAME, PASSWORD FROM AUTHENTICATION WHERE EMAIL = '{email}' AND FLAG = 'P'"
+        ok, res = DB2Query.runSelectQuery(query)
+        if ok and res:
+            user = res[0]
+            stored_password = user.get('PASSWORD')
+            if stored_password == password:
+                auth_token = hashlib.sha256(email.encode()).hexdigest()
+                request.session[f'{auth_token}_user_uid'] = user.get('UID')
+                request.session[f'{auth_token}_user_name'] = user.get('NAME')
+                request.session[f'{auth_token}_is_authenticated'] = True
+                request.session[f'{auth_token}'] = auth_token
+                base64_encoded_email = base64.b64encode(email.encode()).decode()
+                response = redirect('/user/'+base64_encoded_email+'/')
+                response.set_cookie(
+                    'auth_token',
+                    auth_token,
+                    max_age=3 * 60 * 60,   # 3 hours in seconds
+                    httponly=False,
+                    secure=request.is_secure(),
+                    samesite='Lax'
+                )
+                response.set_cookie(
+                    'auth_token_name',
+                    email,
+                    max_age=3 * 60 * 60,   # 3 hours in seconds
+                    httponly=False,
+                    secure=request.is_secure(),
+                    samesite='Lax'
+                )
+                response.set_cookie(
+                    'user_type',
+                    'P',
+                    max_age=3 * 60 * 60,   # 3 hours in seconds
+                    httponly=False,
+                    secure=request.is_secure(),
+                    samesite='Lax'
+                )
+                return response
+
+        # Failed login
+        return render(request, 'src/management/LOGIN.html', {'error': 'Invalid UID or password'})
+    return render(request, 'src/user/DASH.html')
+
+def user_dashboard(request, user_email):
+    auth_token = request.COOKIES.get('auth_token')
+    if auth_token and request.session.get(f'{auth_token}_is_authenticated'):
+        email = base64.b64decode(user_email).decode()
+        return render(request, 'src/user/DASH.html', {'user_email': email})
+    else:
+        return redirect('/login/')
+    
+def user_invoices(request, user_email):
+    auth_token = request.COOKIES.get('auth_token')
+    if auth_token and request.session.get(f'{auth_token}_is_authenticated'):
+        email = base64.b64decode(user_email).decode()
+        return render(request, 'src/user/INVOICES.html', {'user_email': email})
+    else:
+        return redirect('/login/')
+# ===================================================== USER VIEWS
+
+
+def api_user_invoices(request, user_email):
+    """Return invoices for the provided base64-encoded user email.
+    URL: /api/user/invoices/<str:user_email>/
+    """
+    # decode base64 email
+    try:
+        decoded_email = base64.b64decode(user_email).decode('utf-8')
+    except Exception:
+        return JsonResponse({'error': 'Invalid encoded email'}, status=400)
+
+    # sanitize
+    email_s = decoded_email.replace("'", "''")
+
+    # resolve UID
+    uid_q = f"SELECT UID FROM AUTHENTICATION WHERE EMAIL = '{email_s}' FETCH FIRST 1 ROW ONLY"
+    ok, uid_res = DB2Query.runSelectQuery(uid_q)
+    if not ok or not uid_res:
+        return JsonResponse([], safe=False)
+
+    uid = uid_res[0].get('UID')
+    if not uid:
+        return JsonResponse([], safe=False)
+
+    # fetch invoices for UID (aggregate paid amounts)
+    invoice_query = f"""
+        SELECT 
+            p.REC_NUMBER,
+            p.UID,
+            p.USERNAME,
+            p.INNVOCE_NUM,
+            p.DATE,
+            p.AMOUNT,
+            COALESCE(SUM(il.PAID_AMOUNT_ON_DATE), 0) AS PAID_AMOUNT
+        FROM patient_data p
+        LEFT JOIN INVOICE_LOGS il ON p.INNVOCE_NUM = il.INVOICE_NUMBER
+        WHERE p.UID = '{uid}'
+        GROUP BY p.REC_NUMBER, p.UID, p.USERNAME, p.INNVOCE_NUM, p.DATE, p.AMOUNT
+        ORDER BY p.DATE DESC
+    """
+
+    success, invoices = DB2Query.runSelectQuery(invoice_query)
+    if not success or not invoices:
+        return JsonResponse([], safe=False)
+
+    formatted = []
+    for row in invoices:
+        amount = float(row.get('AMOUNT') or 0)
+        paid_amount = float(row.get('PAID_AMOUNT') or 0)
+        remaining = max(0, amount - paid_amount)
+        remark = 'Paid' if paid_amount >= amount else 'Pending'
+
+        formatted.append({
+            'recNumber': row.get('REC_NUMBER'),
+            'uid': row.get('UID'),
+            'username': row.get('USERNAME'),
+            'invoiceNum': row.get('INNVOCE_NUM'),
+            'date': str(row.get('DATE')),
+            'amount': amount,
+            'paidAmount': paid_amount,
+            'remainingAmount': remaining,
+            'remark': remark,
+        })
+
+    return JsonResponse(formatted, safe=False)
+    
 
 # ===================================================== HIGH LEVEL VIEWS
 
@@ -763,4 +926,141 @@ def records_count(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
+def user_stats(request, user_email):
+    auth_token = request.COOKIES.get('auth_token')
+    if not auth_token or not request.session.get(f'{auth_token}_is_authenticated'):
+        return JsonResponse({"error": "Unauthorized"}, status=401)
+
+    if not user_email:
+        return JsonResponse({"error": "User email not found in session"}, status=400)
+
+    # sanitize email to avoid breaking SQL
+    email_s = user_email.replace("'", "''")
+
+    # 1) Resolve UID for the email
+    uid_q = f"SELECT UID FROM AUTHENTICATION WHERE EMAIL = '{email_s}' FETCH FIRST 1 ROW ONLY"
+    ok, uid_res = DB2Query.runSelectQuery(uid_q)
+    if not ok:
+        return JsonResponse({"error": "Failed to resolve user"}, status=500)
+    if not uid_res:
+        return JsonResponse({"error": "User not found"}, status=404)
+
+    uid = uid_res[0].get("UID")
+    if not uid:
+        return JsonResponse({"error": "User UID not found"}, status=404)
+
+    # compute month/year values for payment summaries
+    now = timezone.now()
+    this_month = now.month
+    this_year = now.year
+    if this_month == 1:
+        last_month = 12
+        last_month_year = this_year - 1
+    else:
+        last_month = this_month - 1
+        last_month_year = this_year
+
+    # 2) Summary: aggregate counts and sums per invoice using invoice logs aggregation
+    summary_query = f"""
+        WITH il AS (
+            SELECT INVOICE_NUMBER, COALESCE(SUM(PAID_AMOUNT_ON_DATE), 0) AS TOTAL_PAID
+            FROM INVOICE_LOGS
+            GROUP BY INVOICE_NUMBER
+        )
+        SELECT
+            COUNT(*) AS TOTAL_INVOICES,
+            COALESCE(SUM(p.AMOUNT), 0) AS TOTAL_AMOUNT,
+            COALESCE(SUM(
+                CASE WHEN COALESCE(il.TOTAL_PAID,0) < p.AMOUNT THEN p.AMOUNT - COALESCE(il.TOTAL_PAID,0) ELSE 0 END
+            ), 0) AS PENDING_DUES,
+            COALESCE(SUM(CASE WHEN COALESCE(il.TOTAL_PAID,0) = 0 THEN 1 ELSE 0 END), 0) AS UNPAID_COUNT,
+            COALESCE(SUM(CASE WHEN COALESCE(il.TOTAL_PAID,0) >= p.AMOUNT THEN COALESCE(p.AMOUNT,0) ELSE COALESCE(il.TOTAL_PAID,0) END), 0) AS PAID_AMOUNT,
+            COALESCE(SUM(CASE WHEN COALESCE(il.TOTAL_PAID,0) >= p.AMOUNT THEN 1 ELSE 0 END), 0) AS PAID_COUNT,
+            COALESCE(SUM(CASE WHEN COALESCE(il.TOTAL_PAID,0) > 0 AND COALESCE(il.TOTAL_PAID,0) < p.AMOUNT THEN 1 ELSE 0 END), 0) AS PENDING_COUNT
+        FROM patient_data p
+        LEFT JOIN il ON p.INNVOCE_NUM = il.INVOICE_NUMBER
+        WHERE p.UID = '{uid}'
+    """
+    ok, summary_res = DB2Query.runSelectQuery(summary_query)
+    if not ok or not summary_res:
+        return JsonResponse({"error": "Failed to fetch summary"}, status=500)
+    srow = summary_res[0]
+
+    summary = {
+        "total_invoices": int(srow.get("TOTAL_INVOICES") or 0),
+        "total_amount": float(srow.get("TOTAL_AMOUNT") or 0.0),
+        "pending_dues": float(srow.get("PENDING_DUES") or 0.0),
+        "unpaid_count": int(srow.get("UNPAID_COUNT") or 0),
+        "paid_amount": float(srow.get("PAID_AMOUNT") or 0.0),
+        "paid_count": int(srow.get("PAID_COUNT") or 0),
+        "pending_count": int(srow.get("PENDING_COUNT") or 0),
+    }
+
+    # 3) Payment summary: this_month and last_month sums using MONTH/YEAR to avoid date math
+    payments_q = f"""
+        WITH user_invoices AS (
+            SELECT INNVOCE_NUM FROM patient_data WHERE UID = '{uid}'
+        )
+        SELECT
+            COALESCE(SUM(CASE WHEN MONTH(LOG_DATE) = {this_month} AND YEAR(LOG_DATE) = {this_year} THEN PAID_AMOUNT_ON_DATE ELSE 0 END), 0) AS THIS_MONTH,
+            COALESCE(SUM(CASE WHEN MONTH(LOG_DATE) = {last_month} AND YEAR(LOG_DATE) = {last_month_year} THEN PAID_AMOUNT_ON_DATE ELSE 0 END), 0) AS LAST_MONTH
+        FROM INVOICE_LOGS il
+        JOIN user_invoices ui ON ui.INNVOCE_NUM = il.INVOICE_NUMBER
+    """
+    ok, pay_res = DB2Query.runSelectQuery(payments_q)
+    if not ok or not pay_res:
+        return JsonResponse({"error": "Failed to fetch payment summary"}, status=500)
+    prow = pay_res[0]
+
+    payment_summary = {
+        "this_month": float(prow.get("THIS_MONTH") or 0.0),
+        "last_month": float(prow.get("LAST_MONTH") or 0.0)
+    }
+
+    # 4) Recent transactions: last 5 logs for user's invoices (status only 'paid' or 'pending')
+    recent_q = f"""
+        WITH user_invoices AS (
+            SELECT INNVOCE_NUM, AMOUNT FROM patient_data WHERE UID = '{uid}'
+        ),
+        total_paid AS (
+            SELECT INVOICE_NUMBER, COALESCE(SUM(PAID_AMOUNT_ON_DATE),0) AS TOTAL_PAID
+            FROM INVOICE_LOGS
+            WHERE INVOICE_NUMBER IN (SELECT INNVOCE_NUM FROM user_invoices)
+            GROUP BY INVOICE_NUMBER
+        )
+        SELECT il.INVOICE_NUMBER, il.LOG_DATE, il.PAID_AMOUNT_ON_DATE, COALESCE(tp.TOTAL_PAID,0) AS TOTAL_PAID, ui.AMOUNT
+        FROM INVOICE_LOGS il
+        JOIN user_invoices ui ON ui.INNVOCE_NUM = il.INVOICE_NUMBER
+        LEFT JOIN total_paid tp ON tp.INVOICE_NUMBER = il.INVOICE_NUMBER
+        ORDER BY il.LOG_DATE DESC
+        FETCH FIRST 5 ROWS ONLY
+    """
+    ok, recent_res = DB2Query.runSelectQuery(recent_q)
+    recent_transactions = []
+    if ok and recent_res:
+        for r in recent_res:
+            invoice_number = r.get("INVOICE_NUMBER")
+            amount = float(r.get("PAID_AMOUNT_ON_DATE") or 0.0)
+            log_date = r.get("LOG_DATE")
+            date_s = str(log_date)[:10] if log_date is not None else None
+            total_paid = float(r.get("TOTAL_PAID") or 0.0)
+            invoice_amount = float(r.get("AMOUNT") or 0.0)
+
+            # Only two statuses: paid or pending
+            status = "paid" if total_paid >= invoice_amount else "pending"
+
+            recent_transactions.append({
+                "invoice_number": invoice_number,
+                "amount": amount,
+                "date": date_s,
+                "status": status
+            })
+
+    result = {
+        "summary": summary,
+        "payment_summary": payment_summary,
+        "recent_transactions": recent_transactions
+    }
+
+    return JsonResponse(result)
 # ===================================================== API VIEWS

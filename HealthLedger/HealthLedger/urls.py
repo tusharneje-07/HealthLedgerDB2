@@ -19,6 +19,7 @@ from django.urls import path
 from . import views
 from django.http import HttpResponse
 urlpatterns = [
+    # Management Paths
     path('admin/', admin.site.urls),
     path("", views.DASH, name="Dashboard"),
     path('new_record/', views.CREATE, name='home'),
@@ -28,6 +29,12 @@ urlpatterns = [
     path('login/', views.LOGIN, name='login'),
     path('logout/', views.LOGOUT, name='logout'),
     
+    # User Paths
+    path('login/patient/', views.user_login, name='user_login'),
+    path('user/<str:user_email>/', views.user_dashboard, name='user_dashboard'),
+    path('user/<str:user_email>/invoices/', views.user_invoices, name='user_invoices'),
+    # API to fetch invoices for a specific user (email is base64 encoded in the path)
+    path('api/user/invoices/<str:user_email>/', views.api_user_invoices, name='api_user_invoices'),
     
     # APIS
     path('api/get_data_by_uid', views.get_data_by_uid, name='get_data_by_uid'),
@@ -41,6 +48,9 @@ urlpatterns = [
     path('api/records/', views.load_data, name='api_records'),
     path('api/records/count/', views.records_count, name='api_records_count'),
     
+    # User APIs
+    path('api/user/stats/<str:user_email>/', views.user_stats, name='user_stats'),
+
     # Warning Handling
     path('.well-known/appspecific/com.chrome.devtools.json', lambda r: HttpResponse('{}', content_type='application/json')),
     path('favicon.ico', lambda r: HttpResponse('{}', content_type='application/json')),

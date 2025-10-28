@@ -79,13 +79,13 @@
 					</form>
 
 					<!-- Patient Form -->
-					<form id="form-patient" class="w-1/2 pl-6" method="post" action="/login/">
+					<form id="form-patient" class="w-1/2 pl-6" method="post" action="/login/patient/">
 						{% csrf_token %}
 						<input type="hidden" name="user_type" value="P">
 						<div class="space-y-4">
 							<label class="block">
 								<span class="text-sm text-zinc-400">Patient ID or Email</span>
-								<input name="username" type="text" required class="mt-1 block w-full rounded-md bg-zinc-900/60 border border-zinc-700 text-zinc-100 placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-zinc-600" placeholder="Patient ID or email">
+								<input name="email" type="text" required class="mt-1 block w-full rounded-md bg-zinc-900/60 border border-zinc-700 text-zinc-100 placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-zinc-600" placeholder="Patient ID or email">
 							</label>
 
 							<label class="block">
@@ -104,14 +104,6 @@
 									</button>
 								</div>
 							</label>
-
-							<div class="flex items-center justify-between text-sm text-zinc-400">
-								<label class="inline-flex items-center gap-2">
-									<input type="checkbox" name="remember" class="rounded bg-zinc-700 text-zinc-200 focus:ring-zinc-600">
-									<span>Remember me</span>
-								</label>
-								<a href="#" class="text-sm text-zinc-400 hover:text-zinc-100">Need help?</a>
-							</div>
 
 							<div>
 								<button type="submit" class="w-full px-4 py-3 bg-zinc-200 text-zinc-900 rounded-lg font-medium hover:bg-zinc-100 transition">Sign in as Patient</button>
@@ -132,22 +124,54 @@
             </form>
 		</div>
 		</div>
-	<!-- Auto-login Passkey Popup (shows when auth_token cookie exists) -->
+
 	<!-- Modal markup -->
 	<div id="passkey-modal-backdrop" class="hidden fixed inset-0 bg-black/50 z-50 items-center justify-center">
 		<div id="passkey-modal" class="bg-zinc-800 text-zinc-100 rounded-lg shadow-xl w-full max-w-md mx-auto p-6">
 			<div class="flex justify-between items-start">
-				<h3 class="text-lg font-semibold">Login with Passkey</h3>
+				<h3 class="text-lg font-semibold">Login with Auth Key</h3>
 				<button id="passkey-modal-close" aria-label="Close" class="text-zinc-300 hover:text-zinc-100">✕</button>
 			</div>
-			<p id="passkey-modal-body" class="mt-4 text-sm text-zinc-300">Sign in using your device passkey.</p>
+			<p id="passkey-modal-body" class="mt-4 text-sm text-zinc-300">Auto Sign in using your auth key.</p>
 			<div class="mt-6 flex gap-3">
-				<button id="passkey-modal-login" class="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded" onclick="document.getElementById('token_key_login').submit()">Login with Key</button>
+				<button id="passkey-modal-login" class="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded" onclick="auth_key_login()">Login with Key</button>
 				<button id="passkey-modal-cancel" class="flex-1 px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded">Close</button>
 			</div>
 		</div>
 	</div>
+	
+	<script>
+		console.log("Login page script loaded.");
+		function auth_key_login() {
+			console.log("Auth key login triggered.");
+			if (getCookie('user_type') === 'S') {
+				document.getElementById('token_key_login').action = '/login/';
+				document.getElementById('token_key_login').submit();
+			} else if (getCookie('user_type') === 'P') {
+				document.getElementById('token_key_login').action = '/login/patient/';
+				document.getElementById('token_key_login').submit();
+			} else {
+				console.error("Unknown user type for auth key login.");
+			}
+			
+		}
+	</script>
 
+	{% if error %}
+	<div id="error_popup" class="fixed inset-0 bg-black/50 z-50 items-center justify-center top-0 left-0 flex">
+		<div id="error_modal" class="bg-zinc-800 text-zinc-100 rounded-lg shadow-xl w-full max-w-md mx-auto p-6">
+			<div class="flex justify-between items-start">
+				<h3 class="text-lg font-semibold">Login Failed!</h3>
+				<button id="error-modal-close" aria-label="Close" class="text-zinc-300 hover:text-zinc-100" onclick="document.getElementById('error_popup').classList.add('hidden')">✕</button>
+			</div>
+			<p id="error-modal-body" class="mt-4 text-sm text-zinc-300">{{error_msg}}</p>
+			<div class="mt-6 flex gap-3">				
+				<button id="error-modal-cancel" class="flex-1 px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded" onclick="document.getElementById('error_popup').classList.add('hidden')">Close</button>
+			</div>
+		</div>
+	</div>
+	{% endif %}
+	
 	<script>
 		// Toggle logic to slide between staff and patient forms
 		const btnStaff = document.getElementById('btn-staff');
@@ -162,7 +186,7 @@
 				btnPatient.classList.remove('text-zinc-100','toggle-btn-active');
 				btnPatient.classList.add('text-zinc-400');
 			} else {
-				forms.style.transform = 'translateX(-50%)';
+				forms.style.transform = 'translateX(-52%)';
 				btnPatient.classList.add('text-zinc-100','toggle-btn-active');
 				btnPatient.classList.remove('text-zinc-400');
 				btnStaff.classList.remove('text-zinc-100','toggle-btn-active');
@@ -234,7 +258,7 @@
 			var btnCancel = document.getElementById('passkey-modal-cancel');
 
 			// personalize message
-			body.textContent = 'Login as ' + name + ' using your device passkey.';
+			body.textContent = 'Auto Login as ' + name + ' using your Auth Key. No Password needed.';
 
 			// show backdrop and center it using flex
 			backdrop.classList.remove('hidden');

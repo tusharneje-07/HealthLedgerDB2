@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HealthLedger - User Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+            }
+            to {
+                transform: translateX(0);
+            }
+        }
+        
+        .sidebar-enter {
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        
+        .card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+        }
+    </style>
+</head>
+<body class="bg-zinc-900 text-zinc-100 min-h-screen">
+    <!-- Hidden input for user email (Jinja variable) -->
+    <input type="hidden" id="userEmail" value="{{ user_email }}">
+    
+    <!-- Navbar -->
+    <nav class="bg-zinc-800 border-b border-zinc-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo -->
+                <div class="flex items-center">
+                    <div class="text-xl font-semibold text-zinc-100">
+                        HealthLedger
+                    </div>
+                </div>
+                
+                <!-- Desktop Navigation Links -->
+                <div class="hidden md:flex space-x-6">
+                    <a href="/dashboard" class="text-zinc-100 hover:text-zinc-300 transition-colors duration-200 font-medium">Dashboard</a>
+                    <a href="/invoices" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">Invoices</a>
+                    <a href="/logout" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">SleepOut</a>
+                </div>
+                
+                <!-- User Menu -->
+                <div class="flex items-center space-x-4">
+                    <button class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                        </svg>
+                    </button>
+                    
+                    <!-- Mobile Menu Button -->
+                    <button id="mobileMenuBtn" class="md:hidden text-zinc-400 hover:text-zinc-100">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                    
+                    <!-- Desktop Profile -->
+                    <div class="hidden md:flex items-center space-x-2">
+                        <div class="w-8 h-8 bg-zinc-700 rounded-full flex items-center justify-center text-sm font-medium">
+                            TN
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Mobile Sidebar -->
+    <div id="mobileSidebar" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden">
+        <div class="fixed right-0 top-0 h-full w-64 bg-zinc-800 shadow-xl sidebar-enter">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-8">
+                    <div class="w-10 h-10 bg-zinc-700 rounded-full flex items-center justify-center text-sm font-medium">
+                        TN
+                    </div>
+                    <button id="closeSidebar" class="text-zinc-400 hover:text-zinc-100">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <nav class="space-y-4">
+                    <a href="/dashboard" class="block text-zinc-100 hover:text-zinc-300 py-2 px-4 rounded-lg bg-zinc-700">Dashboard</a>
+                    <a href="/invoices" class="block text-zinc-400 hover:text-zinc-100 py-2 px-4 rounded-lg hover:bg-zinc-700">Invoices</a>
+                    <a href="/logout" class="block text-zinc-400 hover:text-zinc-100 py-2 px-4 rounded-lg hover:bg-zinc-700">SleepOut</a>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Welcome Section -->
+        <div class="mb-8">
+            <h1 class="text-3xl sm:text-4xl font-bold mb-2">Welcome Back!</h1>
+            <p class="text-zinc-400">Here's an overview of your account and recent activities</p>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loadingState" class="flex items-center justify-center py-20">
+            <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-zinc-100"></div>
+        </div>
+
+        <!-- Dashboard Content -->
+        <div id="dashboardContent" class="hidden">
+            <!-- Financial Overview Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
+                <!-- Total Invoices -->
+                <div class="card-hover bg-gradient-to-br from-zinc-700 to-zinc-800 rounded-xl p-6 shadow-lg border border-zinc-600">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="w-12 h-12 bg-zinc-600 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-zinc-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <p class="text-zinc-400 text-sm mb-1">Total Invoices</p>
+                    <h3 id="totalInvoices" class="text-3xl font-bold text-zinc-100 mb-2">0</h3>
+                    <p id="invoicesPeriod" class="text-xs text-zinc-500">All time</p>
+                </div>
+
+                <!-- Total Amount -->
+                <div class="card-hover bg-gradient-to-br from-zinc-700 to-zinc-800 rounded-xl p-6 shadow-lg border border-zinc-600">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="w-12 h-12 bg-zinc-600 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-zinc-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <p class="text-zinc-400 text-sm mb-1">Total Billed</p>
+                    <h3 id="totalAmount" class="text-3xl font-bold text-zinc-100 mb-2">₹0</h3>
+                    <p id="amountPeriod" class="text-xs text-zinc-500">All invoices</p>
+                </div>
+
+                <!-- Pending Dues -->
+                <div class="card-hover bg-gradient-to-br from-zinc-700 to-zinc-800 rounded-xl p-6 shadow-lg border border-zinc-600">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="w-12 h-12 bg-zinc-600 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-zinc-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <p class="text-zinc-400 text-sm mb-1">Pending Dues</p>
+                    <h3 id="pendingDues" class="text-3xl font-bold text-zinc-100 mb-2">₹0</h3>
+                    <p id="duesCount" class="text-xs text-zinc-500">0 unpaid invoices</p>
+                </div>
+
+                <!-- Paid Amount -->
+                <div class="card-hover bg-gradient-to-br from-zinc-700 to-zinc-800 rounded-xl p-6 shadow-lg border border-zinc-600">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="w-12 h-12 bg-zinc-600 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-zinc-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <p class="text-zinc-400 text-sm mb-1">Total Paid</p>
+                    <h3 id="paidAmount" class="text-3xl font-bold text-zinc-100 mb-2">₹0</h3>
+                    <p id="paidCount" class="text-xs text-zinc-500">0 paid invoices</p>
+                </div>
+            </div>
+
+            <!-- Two Column Layout -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Recent Transactions (2/3 width) -->
+                <div class="lg:col-span-2 bg-zinc-800 rounded-xl p-6 border border-zinc-700">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-xl font-semibold">Recent Transactions</h2>
+                    </div>
+                    <div id="recentTransactions" class="space-y-4">
+                        <!-- Transactions will be inserted here -->
+                    </div>
+                </div>
+
+                <!-- Payment Summary (1/3 width) -->
+                <div class="bg-zinc-800 rounded-xl p-6 border border-zinc-700">
+                    <h2 class="text-xl font-semibold mb-6">Payment Summary</h2>
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center py-3 border-b border-zinc-700">
+                            <span class="text-zinc-400">This Month</span>
+                            <span id="thisMonthAmount" class="font-semibold">₹0</span>
+                        </div>
+                        <div class="flex justify-between items-center py-3 border-b border-zinc-700">
+                            <span class="text-zinc-400">Last Month</span>
+                            <span id="lastMonthAmount" class="font-semibold">₹0</span>
+                        </div>
+                            <!-- Overdue and next due date removed (not provided by API) -->
+                    </div>
+
+                    <div class="mt-6 pt-6 ">
+                        <h3 class="text-sm font-semibold mb-3">Quick Actions</h3>
+                        <div class="space-y-2">
+                            <button onclick="window.location.href='/make-payment'" class="w-full bg-zinc-700 hover:bg-zinc-600 text-zinc-100 py-2 px-4 rounded-lg text-sm transition-colors">
+                                Make Payment
+                            </button>
+                            <button onclick="window.location.href='/invoices'" class="w-full bg-zinc-700 hover:bg-zinc-600 text-zinc-100 py-2 px-4 rounded-lg text-sm transition-colors">
+                                View All Invoices
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Invoice Status Overview -->
+            <div class="mt-6 bg-zinc-800 rounded-xl p-6 border border-zinc-700">
+                <h2 class="text-xl font-semibold mb-6">Invoice Status Overview</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="bg-zinc-900 rounded-lg p-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-zinc-400 text-sm">Paid</span>
+                            <span class="text-green-400 text-xs font-semibold" id="paidPercentage">0%</span>
+                        </div>
+                        <div class="w-full bg-zinc-700 rounded-full h-2">
+                            <div id="paidBar" class="bg-gradient-to-r from-green-600 to-green-400 h-2 rounded-full" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div class="bg-zinc-900 rounded-lg p-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-zinc-400 text-sm">Pending</span>
+                            <span class="text-yellow-300 text-xs font-semibold" id="pendingPercentage">0%</span>
+                        </div>
+                        <div class="w-full bg-zinc-700 rounded-full h-2">
+                            <div id="pendingBar" class="bg-gradient-to-r from-yellow-400 to-yellow-600 h-2 rounded-full" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Mobile menu functionality
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const mobileSidebar = document.getElementById('mobileSidebar');
+        const closeSidebar = document.getElementById('closeSidebar');
+
+        mobileMenuBtn.addEventListener('click', () => {
+            mobileSidebar.classList.remove('hidden');
+        });
+
+        closeSidebar.addEventListener('click', () => {
+            mobileSidebar.classList.add('hidden');
+        });
+
+        mobileSidebar.addEventListener('click', (e) => {
+            if (e.target === mobileSidebar) {
+                mobileSidebar.classList.add('hidden');
+            }
+        });
+
+        // Get user email from hidden input
+        const userEmail = document.getElementById('userEmail').value;
+
+        // Format currency
+        function formatCurrency(amount) {
+            return '₹' + parseFloat(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        // Format date
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+
+        // Time ago formatting
+        function timeAgo(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const seconds = Math.floor((now - date) / 1000);
+            
+            const intervals = {
+                year: 31536000,
+                month: 2592000,
+                week: 604800,
+                day: 86400,
+                hour: 3600,
+                minute: 60
+            };
+            
+            for (const [unit, secondsInUnit] of Object.entries(intervals)) {
+                const interval = Math.floor(seconds / secondsInUnit);
+                if (interval >= 1) {
+                    return interval === 1 ? `1 ${unit} ago` : `${interval} ${unit}s ago`;
+                }
+            }
+            return 'Just now';
+        }
+
+        // Fetch dashboard data
+        async function fetchDashboardData() {
+            try {
+                const response = await fetch(`/api/user/stats/${userEmail}`);
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch dashboard data');
+                }
+                
+                const data = await response.json();
+                updateDashboard(data);
+            } catch (error) {
+                console.error('Error fetching dashboard data:', error);
+                document.getElementById('loadingState').innerHTML = `
+                    <div class="text-center">
+                        <p class="text-red-400 mb-4 text-lg">Failed to load dashboard data</p>
+                        <button onclick="fetchDashboardData()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg">
+                            Try Again
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        // Update dashboard with fetched data
+        function updateDashboard(data) {
+            // Hide loading, show content
+            document.getElementById('loadingState').classList.add('hidden');
+            document.getElementById('dashboardContent').classList.remove('hidden');
+
+            // Update summary cards
+            document.getElementById('totalInvoices').textContent = data.summary.total_invoices;
+            document.getElementById('totalAmount').textContent = formatCurrency(data.summary.total_amount);
+            document.getElementById('pendingDues').textContent = formatCurrency(data.summary.pending_dues);
+            document.getElementById('duesCount').textContent = `${data.summary.unpaid_count} unpaid invoices`;
+            document.getElementById('paidAmount').textContent = formatCurrency(data.summary.paid_amount);
+            document.getElementById('paidCount').textContent = `${data.summary.paid_count} paid invoices`;
+
+            // Update payment summary
+            document.getElementById('thisMonthAmount').textContent = formatCurrency(data.payment_summary.this_month);
+            document.getElementById('lastMonthAmount').textContent = formatCurrency(data.payment_summary.last_month);
+
+            // Update status bars (robust calculation, clamp 0-100)
+            // Ensure numeric values and avoid NaN or unexpected results that may leave the bar at a previous width.
+            const total = Number(data.summary.total_invoices) || 0;
+            const paidCount = Number(data.summary.paid_count) || 0;
+            // Determine pending/unpaid count robustly:
+            // Priority: if pending_count is a positive number use it; otherwise if unpaid_count is positive use that.
+            let pendingCount = Number(data.summary.pending_count);
+            if (!Number.isFinite(pendingCount) || pendingCount <= 0) {
+                pendingCount = Number(data.summary.unpaid_count) || 0;
+            }
+
+            function percent(part, whole) {
+                if (whole <= 0) return 0;
+                const p = Math.round((part / whole) * 100);
+                // clamp to 0-100 to avoid invalid widths
+                return Math.max(0, Math.min(100, p));
+            }
+
+            const paidPercent = percent(paidCount, total);
+            const pendingPercent = percent(pendingCount, total);
+
+            // Update labels
+            document.getElementById('paidPercentage').textContent = `${paidPercent}%`;
+            document.getElementById('pendingPercentage').textContent = `${pendingPercent}%`;
+
+            // Apply widths explicitly. If any value is invalid, set to 0%.
+            document.getElementById('paidBar').style.width = paidPercent + '%';
+            document.getElementById('pendingBar').style.width = pendingPercent + '%';
+
+            // Debug info for troubleshooting (can be removed later)
+            // console.debug('status percents', { total, paidCount, pendingCount, overdueCount, paidPercent, pendingPercent, overduePercent });
+
+            // Update recent transactions
+            const transactionsContainer = document.getElementById('recentTransactions');
+            transactionsContainer.innerHTML = '';
+
+            if (data.recent_transactions && data.recent_transactions.length > 0) {
+                data.recent_transactions.forEach(transaction => {
+                    const statusColor = transaction.status === 'paid' ? 'text-zinc-400 bg-zinc-500' : 
+                                      transaction.status === 'pending' ? 'text-zinc-400 bg-zinc-500' : 
+                                      'text-zinc-400 bg-zinc-500';
+                    
+                    const statusBg = 'bg-zinc-700';
+                    
+                    const statusText = transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1);
+                    
+                    const transactionItem = document.createElement('div');
+                    transactionItem.className = 'flex items-center justify-between p-4 bg-zinc-900 rounded-lg hover:bg-zinc-750 transition-colors';
+                    transactionItem.innerHTML = `
+                        <div class="flex items-center space-x-4">
+                            <div class="w-10 h-10 ${statusBg} rounded-full flex items-center justify-center">
+                                <div class="w-2 h-2 ${statusColor} rounded-full"></div>
+                            </div>
+                            <div>
+                                <h4 class="font-medium">${transaction.invoice_number}</h4>
+                                <p class="text-sm text-zinc-400">${formatDate(transaction.date)}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p class="font-semibold">${formatCurrency(transaction.amount)}</p>
+                            <p class="text-xs ${statusColor.split(' ')[0]}">${statusText}</p>
+                        </div>
+                    `;
+                    transactionsContainer.appendChild(transactionItem);
+                });
+            } else {
+                transactionsContainer.innerHTML = '<p class="text-zinc-400 text-center py-8">No recent transactions</p>';
+            }
+        }
+
+        // Load dashboard on page load
+        fetchDashboardData();
+    </script>
+</body>
+</html>
