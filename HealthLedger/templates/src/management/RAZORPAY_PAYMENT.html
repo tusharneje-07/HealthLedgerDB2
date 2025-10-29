@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Razorpay Payment - HealthLedger</title>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+        
+        .logo {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            color: white;
+        }
+        
+        h1 {
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+        
+        .amount-box {
+            background: #f7f7f7;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+        }
+        
+        .amount-label {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        
+        .amount {
+            font-size: 42px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .invoice-info {
+            background: #fff4e6;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 25px;
+            font-size: 13px;
+            color: #666;
+            text-align: left;
+        }
+        
+        .invoice-info div {
+            margin-bottom: 5px;
+        }
+        
+        .invoice-info div:last-child {
+            margin-bottom: 0;
+        }
+        
+        .invoice-info strong {
+            color: #333;
+        }
+        
+        .pay-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 16px 40px;
+            border-radius: 50px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            width: 100%;
+        }
+        
+        .pay-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+        
+        .pay-button:active {
+            transform: translateY(0);
+        }
+        
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            font-size: 12px;
+            color: #999;
+        }
+        
+        .qr-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+
+        .success-container {
+            display: none;
+        }
+
+        .success-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+
+        .success-title {
+            color: #10b981;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .success-message {
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="paymentContainer">
+        <div class="logo">💳</div>
+        <h1>Payment Terminal</h1>
+        <p class="subtitle">Scan QR code to complete payment</p>
+        
+        <div class="amount-box">
+            <div class="amount-label">Amount to Pay</div>
+            <div class="amount">₹{{ amount|floatformat:2 }}</div>
+        </div>
+
+        <div class="invoice-info">
+            <div><strong>Invoice:</strong> {{ invoice_num }}</div>
+            <div><strong>UID:</strong> {{ uid }}</div>
+        </div>
+
+        <div style="margin: 20px 0; padding: 20px; background: #f0f0f0; border-radius: 10px;">
+            <div class="qr-icon" style="margin-bottom: 10px;">📱</div>
+            <p style="color: #666; font-size: 14px;">Opening Razorpay QR...</p>
+        </div>
+
+        <div class="footer">
+            <div>🔒 Secure Payment via Razorpay</div>
+            <div style="margin-top: 5px;">Order ID: {{ order_id }}</div>
+        </div>
+    </div>
+
+    <div class="container success-container" id="successContainer">
+        <div class="success-icon">✅</div>
+        <h1 class="success-title">Payment Successful!</h1>
+        <p class="success-message">This window will close automatically...</p>
+    </div>
+
+    <script>
+        const razorpayKey = '{{ razorpay_key }}';
+        const orderId = '{{ order_id }}';
+        const amountInPaise = {{ amount_in_paise }};
+        const invoiceNum = '{{ invoice_num }}';
+        const uid = '{{ uid }}';
+        const amount = {{ amount }};
+        const totalAmount = {{ total_amount }};
+
+        function openRazorpayQR() {
+            const options = {
+                key: razorpayKey,
+                amount: amountInPaise,
+                currency: 'INR',
+                name: 'HealthLedger',
+                description: 'Invoice Payment: ' + invoiceNum,
+                order_id: orderId,
+                handler: async function(response) {
+                    // Payment successful - verify with backend
+                    await verifyPayment(response);
+                },
+                modal: {
+                    ondismiss: function() {
+                        // User cancelled payment
+                        if (window.opener) {
+                            window.opener.postMessage({
+                                type: 'PAYMENT_CANCELLED'
+                            }, '*');
+                        }
+                    }
+                },
+                theme: {
+                    color: '#667eea'
+                }
+            };
+
+            const rzp = new Razorpay(options);
+            rzp.open();
+        }
+
+        async function verifyPayment(response) {
+            try {
+                // Send payment details to backend for verification
+                const formData = new FormData();
+                formData.append('razorpay_payment_id', response.razorpay_payment_id);
+                formData.append('razorpay_order_id', response.razorpay_order_id);
+                formData.append('razorpay_signature', response.razorpay_signature);
+                formData.append('invoice_num', invoiceNum);
+                formData.append('uid', uid);
+                formData.append('amount', amount);
+                formData.append('total_amount', totalAmount);
+
+                const verifyResponse = await fetch('/api/verify_payment/', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await verifyResponse.json();
+
+                if (verifyResponse.ok && data.success) {
+                    // Show success message
+                    document.getElementById('paymentContainer').style.display = 'none';
+                    document.getElementById('successContainer').style.display = 'block';
+
+                    // Notify parent window
+                    if (window.opener) {
+                        window.opener.postMessage({
+                            type: 'PAYMENT_SUCCESS',
+                            invoice_num: invoiceNum,
+                            amount: amount
+                        }, '*');
+                    }
+
+                    // Close window after 3 seconds
+                    setTimeout(() => {
+                        window.close();
+                    }, 3000);
+                } else {
+                    alert('Payment verification failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error verifying payment: ' + error.message);
+            }
+        }
+
+        // Auto-open Razorpay immediately on load
+        window.addEventListener('load', function() {
+            openRazorpayQR();
+        });
+    </script>
+</body>
+</html>

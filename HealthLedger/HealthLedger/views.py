@@ -1246,4 +1246,56 @@ def user_payment(request, amount):
     return JsonResponse({
         "error": "This endpoint is deprecated. Use /api/initiate_payment/ and /api/verify_payment/ instead."
     }, status=501)
+
+def razorpay_payment_window(request):
+    """
+    Render the Razorpay payment window (opens in popup)
+    """
+    amount = request.GET.get('amount')
+    invoice_num = request.GET.get('invoice_num')
+    uid = request.GET.get('uid')
+    total_amount = request.GET.get('total_amount')
+    
+    if not all([amount, invoice_num, uid, total_amount]):
+        return HttpResponse("Missing required parameters", status=400)
+    
+    try:
+        amount = float(amount)
+        total_amount = float(total_amount)
+    except ValueError:
+        return HttpResponse("Invalid amount", status=400)
+    
+    # Create Razorpay order
+    try:
+        amount_in_paise = int(amount * 100)
+        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+        
+        order_data = {
+            'amount': amount_in_paise,
+            'currency': 'INR',
+            'payment_capture': 1,
+            'notes': {
+                'invoice_num': invoice_num,
+                'uid': uid
+            }
+        }
+        
+        order = client.order.create(data=order_data)
+        order_id = order['id']
+        
+        context = {
+            'amount': amount,
+            'invoice_num': invoice_num,
+            'uid': uid,
+            'total_amount': total_amount,
+            'order_id': order_id,
+            'razorpay_key': settings.RAZORPAY_KEY_ID,
+            'amount_in_paise': amount_in_paise
+        }
+        
+        return render(request, 'src/management/RAZORPAY_PAYMENT.html', context)
+        
+    except Exception as e:
+        return HttpResponse(f"Error creating payment: {str(e)}", status=500)
+
 # ===================================================== API VIEWS

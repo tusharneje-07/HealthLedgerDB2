@@ -9,6 +9,8 @@
         <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <!-- ZXing library as a robust fallback for 1D barcodes -->
     <script src="https://unpkg.com/@zxing/library@0.18.6/umd/index.min.js"></script>
+    <!-- Razorpay Checkout -->
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 
     </head>
     <body class="bg-zinc-900 min-h-screen text-zinc-100">
@@ -127,15 +129,28 @@
                                     class="block text-sm font-medium text-zinc-400 mb-2">
                                     Amount Paying
                                 </label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    id="updateAmount"
-                                    name="updateAmount"
-                                    required
-                                    class="w-full bg-zinc-700 border-0 rounded-lg px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-zinc-800 transition-all duration-200"
-                                    placeholder="0.00"
-                                    >
+                                <div class="flex gap-3">
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        id="updateAmount"
+                                        name="updateAmount"
+                                        required
+                                        class="flex-1 bg-zinc-700 border-0 rounded-lg px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-zinc-800 transition-all duration-200"
+                                        placeholder="0.00"
+                                        >
+                                    <button
+                                        type="button"
+                                        id="razorpayPaymentBtn"
+                                        class="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg transition-all duration-200 border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-zinc-800 whitespace-nowrap"
+                                        disabled
+                                        onclick="openRazorpayWindow()">
+                                        <svg class="w-5 h-5 inline-block mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path>
+                                        </svg>
+                                        Razorpay Payment
+                                    </button>
+                                </div>
                             </div>
                             <!-- INVOICE_NUM Field ==> UID (Auto-filled) -->
                             <div>
@@ -869,6 +884,9 @@
                     }
                     
                     loadTableData(data);
+                    
+                    // Update Razorpay button state after loading invoice
+                    updateRazorpayButtonState();
                 }
                 
                 })
@@ -1193,6 +1211,95 @@
                     modal.classList.add('hidden');
                 }
             }
+        </script>
+
+        <script>
+            // ===== RAZORPAY PAYMENT WINDOW =====
+            
+            // Enable/Disable Razorpay button based on invoice data
+            document.getElementById('updateUid').addEventListener('input', function() {
+                updateRazorpayButtonState();
+            });
+
+            document.getElementById('updateAmount').addEventListener('input', function() {
+                updateRazorpayButtonState();
+            });
+
+            function updateRazorpayButtonState() {
+                const invoiceNum = document.getElementById('updateInvoiceNum').value;
+                const amount = parseFloat(document.getElementById('updateAmount').value) || 0;
+                const totalAmountText = document.getElementById('totalAmount').value;
+                const razorpayBtn = document.getElementById('razorpayPaymentBtn');
+
+                // Extract numeric value from totalAmount (remove ₹ symbol)
+                const totalAmount = parseFloat(totalAmountText.replace('₹', '')) || 0;
+
+                // Enable button if invoice is loaded, amount is entered, and amount is valid
+                if (invoiceNum && amount > 0 && amount <= totalAmount) {
+                    razorpayBtn.disabled = false;
+                    razorpayBtn.classList.remove('cursor-not-allowed', 'opacity-50');
+                    razorpayBtn.classList.add('cursor-pointer', 'hover:bg-blue-700');
+                } else {
+                    razorpayBtn.disabled = true;
+                    razorpayBtn.classList.add('cursor-not-allowed', 'opacity-50');
+                    razorpayBtn.classList.remove('cursor-pointer', 'hover:bg-blue-700');
+                }
+            }
+
+            // Open Razorpay payment in new window
+            function openRazorpayWindow() {
+                const amount = parseFloat(document.getElementById('updateAmount').value) || 0;
+                const invoiceNum = document.getElementById('updateInvoiceNum').value;
+                const uid = document.getElementById('updateUid').value;
+                const totalAmountText = document.getElementById('totalAmount').value;
+                const totalAmount = parseFloat(totalAmountText.replace('₹', '')) || 0;
+
+                if (!invoiceNum || !uid) {
+                    alert('Please scan/enter invoice number first');
+                    return;
+                }
+
+                if (amount <= 0) {
+                    alert('Please enter a valid payment amount');
+                    return;
+                }
+
+                if (amount > totalAmount) {
+                    alert('Payment amount cannot exceed remaining amount of ₹' + totalAmount.toFixed(2));
+                    return;
+                }
+
+                // Open payment window with query parameters (use manually entered amount)
+                const width = 500;
+                const height = 700;
+                const left = (screen.width - width) / 2;
+                const top = (screen.height - height) / 2;
+
+                const url = `/razorpay_payment?amount=${amount}&invoice_num=${encodeURIComponent(invoiceNum)}&uid=${encodeURIComponent(uid)}&total_amount=${totalAmount}`;
+                
+                window.open(url, 'RazorpayPayment', `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`);
+            }
+
+            // Listen for payment completion message from popup window
+            window.addEventListener('message', function(event) {
+                if (event.data.type === 'PAYMENT_SUCCESS') {
+                    // Auto-fill the payment amount
+                    document.getElementById('updateAmount').value = event.data.amount;
+                    
+                    // Show success message
+                    alert('Payment Successful! ₹' + event.data.amount + ' paid for invoice ' + event.data.invoice_num);
+                    
+                    // Auto-submit the form to update payment in database
+                    setTimeout(function() {
+                        document.getElementById('updateForm').dispatchEvent(new Event('submit'));
+                    }, 500);
+                }
+            });
+
+            // Initialize button state on page load
+            window.addEventListener('DOMContentLoaded', function() {
+                updateRazorpayButtonState();
+            });
         </script>
     </body>
 </html>

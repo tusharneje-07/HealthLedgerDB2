@@ -52,6 +52,9 @@ urlpatterns = [
     path('api/records/count/', views.records_count, name='api_records_count'),
     path('api/user/payment/<str:amount>/', views.user_payment, name='api_user_payment'),
     
+    # Razorpay Payment Window
+    path('razorpay_payment/', views.razorpay_payment_window, name='razorpay_payment_window'),
+    
     # User APIs
     path('api/user/stats/<str:user_email>/', views.user_stats, name='user_stats'),
 
