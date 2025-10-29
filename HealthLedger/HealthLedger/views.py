@@ -1,11 +1,16 @@
 from django.shortcuts import render, redirect
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from .DB2 import DB2Query
 from datetime import datetime
 from collections import defaultdict
 from django.utils import timezone
 import hashlib, base64
 from django.contrib.sessions.models import Session
+import json
+import requests
+from django.views.decorators.csrf import csrf_exempt
+from django.conf import settings
+import razorpay
 
 
 # ===================================================== HIGH LEVEL VIEWS
@@ -194,6 +199,16 @@ def LOGOUT(request):
         request.session[f'{auth_token}_is_authenticated'] = False
         
     return render(request, 'src/management/LOGOUT.html')
+
+def LOGOUT_HARD(request, status):
+    auth_token = request.COOKIES.get('auth_token')
+    response = redirect('/login')
+    if auth_token:
+        response.delete_cookie('auth_token')
+        response.delete_cookie('auth_token_name')
+        response.delete_cookie('user_type')
+        
+    return response
 # ===================================================== MANAGEMENT VIEWS
 
 # ===================================================== USER VIEWS
@@ -262,8 +277,8 @@ def user_login(request):
 def user_dashboard(request, user_email):
     auth_token = request.COOKIES.get('auth_token')
     if auth_token and request.session.get(f'{auth_token}_is_authenticated'):
-        email = base64.b64decode(user_email).decode()
-        return render(request, 'src/user/DASH.html', {'user_email': email})
+        user_email_d = base64.b64decode(user_email).decode()
+        return render(request, 'src/user/DASH.html', {'user_email_d': user_email_d, 'user_email': user_email})
     else:
         return redirect('/login/')
     
@@ -271,7 +286,7 @@ def user_invoices(request, user_email):
     auth_token = request.COOKIES.get('auth_token')
     if auth_token and request.session.get(f'{auth_token}_is_authenticated'):
         email = base64.b64decode(user_email).decode()
-        return render(request, 'src/user/INVOICES.html', {'user_email': email})
+        return render(request, 'src/user/INVOICES.html', {'user_email_d': email, 'user_email': user_email})
     else:
         return redirect('/login/')
 # ===================================================== USER VIEWS
@@ -1063,4 +1078,172 @@ def user_stats(request, user_email):
     }
 
     return JsonResponse(result)
+
+@csrf_exempt
+def initiate_payment(request):
+    """
+    Initiate payment: receives amount, invoice_num, uid from frontend
+    Creates Razorpay order and returns form data
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "Only POST method allowed"}, status=405)
+    
+    try:
+        # Get payment details from POST
+        data = json.loads(request.body)
+        amount = float(data.get('amount', 0))
+        invoice_num = data.get('invoice_num', '')
+        uid = data.get('uid', '')
+        
+        if not amount or not invoice_num or not uid:
+            return JsonResponse({"error": "Missing required fields"}, status=400)
+        
+        # Validate amount is positive
+        if amount <= 0:
+            return JsonResponse({"error": "Invalid amount"}, status=400)
+        
+        # Convert to paise for Razorpay (INR smallest unit)
+        amount_in_paise = int(amount * 100)
+        
+        # Initialize Razorpay client
+        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+        
+        # Create Razorpay order
+        order_data = {
+            'amount': amount_in_paise,
+            'currency': 'INR',
+            'payment_capture': 1,  # Auto-capture payment
+            'notes': {
+                'invoice_num': invoice_num,
+                'uid': uid
+            }
+        }
+        
+        order = client.order.create(data=order_data)
+        order_id = order['id']
+        
+        # Return payment details to frontend
+        return JsonResponse({
+            "success": True,
+            "order_id": order_id,
+            "amount": amount_in_paise,
+            "currency": "INR",
+            "key": settings.RAZORPAY_KEY_ID,
+            "invoice_num": invoice_num,
+            "uid": uid
+        })
+        
+    except razorpay.errors.BadRequestError as e:
+        return JsonResponse({"error": f"Razorpay error: {str(e)}"}, status=400)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+@csrf_exempt
+def verify_payment(request):
+    """
+    Verify Razorpay payment signature and update invoice payment record
+    This is called after Razorpay payment success
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "Only POST method allowed"}, status=405)
+    
+    try:
+        # Get payment verification data
+        razorpay_payment_id = request.POST.get('razorpay_payment_id')
+        razorpay_order_id = request.POST.get('razorpay_order_id')
+        razorpay_signature = request.POST.get('razorpay_signature')
+        
+        # Get invoice details
+        invoice_num = request.POST.get('invoice_num')
+        uid = request.POST.get('uid')
+        amount = request.POST.get('amount')
+        total_amount = request.POST.get('total_amount')
+        
+        if not all([razorpay_payment_id, razorpay_order_id, razorpay_signature, invoice_num, uid, amount, total_amount]):
+            return JsonResponse({"error": "Missing required fields"}, status=400)
+        
+        # Initialize Razorpay client
+        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+        
+        # Verify payment signature
+        params_dict = {
+            'razorpay_order_id': razorpay_order_id,
+            'razorpay_payment_id': razorpay_payment_id,
+            'razorpay_signature': razorpay_signature
+        }
+        
+        try:
+            client.utility.verify_payment_signature(params_dict)
+        except razorpay.errors.SignatureVerificationError:
+            return JsonResponse({"error": "Payment signature verification failed"}, status=400)
+        
+        # Payment verified successfully - update database
+        paid_amount = float(amount)
+        total_amt = float(total_amount)
+        
+        # Sanitize inputs
+        uid_s = uid.replace("'", "''")
+        invoice_s = invoice_num.replace("'", "''")
+        payment_id_s = razorpay_payment_id.replace("'", "''")
+        
+        # Compute remaining
+        remaining_amount = max(0, total_amt - paid_amount)
+        current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Update register table
+        update_query = (
+            f"UPDATE register "
+            f"SET PAID_AMT = {paid_amount} "
+            f"WHERE UID = '{uid_s}' AND INNVOCE_NUM = '{invoice_s}'"
+        )
+        
+        success, msg = DB2Query.runQuery(update_query)
+        if not success:
+            return JsonResponse({"error": "Failed to update payment in database"}, status=500)
+        
+        # Insert into activity log
+        log_desc = f"Payment update for {invoice_num}, ₹{paid_amount}/- Paid via Razorpay (Payment ID: {razorpay_payment_id})."
+        insert_activity_query = (
+            "INSERT INTO activity (log_name, log_desc, log_date_time) "
+            f"VALUES ('Razorpay Payment', '{log_desc}', '{current_timestamp}')"
+        )
+        DB2Query.runQuery(insert_activity_query)
+        
+        # Insert into INVOICE_LOGS
+        insert_invoice_query = (
+            "INSERT INTO INVOICE_LOGS "
+            "(INVOICE_NUMBER, UID, LOG_DATE, AMOUNT, PAID_AMOUNT_ON_DATE, "
+            "REMAINING_AMOUNT_ON_DATE, LOG_REMARK) "
+            f"VALUES ('{invoice_s}', '{uid_s}', '{current_timestamp}', "
+            f"{total_amt}, {paid_amount}, {remaining_amount}, 'Payment via Razorpay - {payment_id_s}')"
+        )
+        DB2Query.runQuery(insert_invoice_query)
+        
+        # Return success response
+        return JsonResponse({
+            "success": True,
+            "message": "Payment verified and updated successfully",
+            "payment_id": razorpay_payment_id,
+            "invoice_num": invoice_num,
+            "amount_paid": paid_amount
+        })
+        
+    except razorpay.errors.SignatureVerificationError:
+        return JsonResponse({"error": "Invalid payment signature"}, status=400)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+def user_payment(request, amount):
+    """
+    Placeholder for Razorpay payment integration.
+    Currently not in use - payments are handled via /api/initiate_payment/ and /api/verify_payment/
+    
+    To implement full Razorpay integration:
+    1. Create Payment model
+    2. Set up Razorpay client with API keys
+    3. Implement order creation and verification
+    """
+    return JsonResponse({
+        "error": "This endpoint is deprecated. Use /api/initiate_payment/ and /api/verify_payment/ instead."
+    }, status=501)
 # ===================================================== API VIEWS

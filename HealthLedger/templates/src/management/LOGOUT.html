@@ -19,27 +19,6 @@
                         HealthLedger
                     </div>
                 </div>
-                
-                <!-- Navigation Links -->
-                {% comment %} <div class="hidden md:flex space-x-6">
-                    <a class="text-zinc-100 hover:text-zinc-300 transition-colors duration-200 font-medium">Dashboard</a>
-                    <a class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/view_all'" style="cursor: pointer;">Records</a>
-                    <a href="#" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/logout'">SleepOut</a>
-                </div> {% endcomment %}
-                
-                <!-- User Menu -->
-                {% comment %} <div class="flex items-center space-x-4">
-                    <button class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
-                        </svg>
-                    </button>
-                    <div class="flex items-center space-x-2">
-                        <div class="w-8 h-8 bg-zinc-700 rounded-full flex items-center justify-center text-sm font-medium">
-                            TN
-                        </div>
-                    </div>
-                </div> {% endcomment %}
             </div>
         </div>
     </nav>
@@ -55,19 +34,23 @@
             <h1 class="text-2xl font-semibold mb-2 text-zinc-100">You’ve been logged out</h1>
             <p class="text-zinc-400 mb-6">Thank you for using <span class="text-zinc-100 font-medium">HealthLedger</span>. We hope to see you again soon.</p>
 
-            <button onclick="window.location.href='/login'" class="w-full bg-emerald-500 hover:bg-emerald-600 text-zinc-100 font-medium py-2.5 rounded-lg transition-all duration-200">
+            <button onclick="window.location.href='/login'" class="w-full bg-emerald-500 hover:bg-emerald-600 text-zinc-100 font-medium py-2.5 rounded-lg transition-all duration-200 mb-2">
                 Log in again
             </button>
 
+            <button onclick="window.location.href='/logout/hard'" class="w-full bg-emerald-500 hover:bg-emerald-600 text-zinc-100 font-medium py-2.5 rounded-lg transition-all duration-200">
+                Logout
+            </button>
+
             <p class="mt-4 text-sm text-zinc-500">
-                Redirecting to login page in <span id="countdown">5</span> seconds...
+                Redirecting to login page in <span id="countdown">25</span> seconds...
             </p>
         </div>
     </main>
 
     <script>
         // Simple countdown redirect
-        let seconds = 5;
+        let seconds = 25;
         const countdown = document.getElementById("countdown");
         const interval = setInterval(() => {
             seconds--;

@@ -7,6 +7,8 @@
         {% load static %}
         <link href="{% static 'css/output.css' %}" rel="stylesheet">
         <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <!-- ZXing library as a robust fallback for 1D barcodes -->
+    <script src="https://unpkg.com/@zxing/library@0.18.6/umd/index.min.js"></script>
 
     </head>
     <body class="bg-zinc-900 min-h-screen text-zinc-100">
@@ -38,7 +40,7 @@
                     </button>
                     <div class="flex items-center space-x-2">
                         <div class="w-8 h-8 bg-zinc-700 rounded-full flex items-center justify-center text-sm font-medium">
-                            TN
+                            <img width="94" height="94" src="https://img.icons8.com/3d-fluency/94/settings-2.png" alt="settings-2"/>
                         </div>
                     </div>
                 </div>
@@ -95,13 +97,27 @@
                             <div id="qrScannerModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60">
                                 <div class="bg-zinc-800 rounded-lg p-4 w-full max-w-md mx-4">
                                     <div class="flex justify-between items-center mb-2">
-                                        <h3 class="text-sm font-medium text-zinc-100">Scan QR Code</h3>
+                                        <h3 class="text-sm font-medium text-zinc-100">Scan QR / Barcode</h3>
                                         <button type="button" onclick="stopScan()" class="text-zinc-400 hover:text-zinc-100 focus:outline-none">
                                             Close
                                         </button>
                                     </div>
-                                    <video id="qrVideo" class="w-full rounded bg-black" autoplay playsinline muted></video>
-                                    <p class="mt-2 text-xs text-zinc-400">Point the camera at the QR code. Scanning will auto-fill the Invoice Number.</p>
+
+                                    <!-- video wrapper (relative) so overlay canvas can draw on top -->
+                                    <div class="relative w-full rounded overflow-hidden bg-black">
+                                        <video id="qrVideo" class="w-full h-auto block" autoplay playsinline muted></video>
+                                        <!-- overlay canvas for drawing bounding boxes and scan line -->
+                                        <canvas id="qrOverlay" class="absolute inset-0 w-full h-full pointer-events-none"></canvas>
+                                    </div>
+
+                                    <!-- Camera selection -->
+                                    <div class="mt-3 flex items-center gap-2">
+                                        <label for="qrCameraSelect" class="text-xs text-zinc-400">Camera:</label>
+                                        <select id="qrCameraSelect" class="text-sm bg-zinc-700 text-zinc-100 rounded px-2 py-1"></select>
+                                        <button id="qrCameraRefresh" type="button" class="text-xs px-2 py-1 bg-zinc-700 text-zinc-100 rounded hover:bg-zinc-600">Refresh</button>
+                                    </div>
+
+                                    <p class="mt-2 text-xs text-zinc-400">Point the camera at the QR or barcode. Scanning will auto-fill the Invoice Number.</p>
                                 </div>
                             </div>
 
@@ -376,8 +392,16 @@
             (function() {
                 let _stream = null;
                 let _scanning = false;
-                let _canvas = null;
-                let _ctx = null;
+                let _captureCanvas = null; // offscreen for image processing
+                let _captureCtx = null;
+                let _overlay = null; // visible overlay canvas
+                let _overlayCtx = null;
+                let _animationFrame = null;
+                let _scanLineY = 0;
+                let _scanLineDirection = 1;
+                let _barcodeDetector = null;
+                let _zxReader = null; // ZXing reader fallback
+                let _currentDeviceId = null;
 
                 async function startScan() {
                     if (_scanning) return;
@@ -385,50 +409,358 @@
                     const modal = document.getElementById("qrScannerModal");
                     const video = document.getElementById("qrVideo");
                     const uidInput = document.getElementById("updateUid");
+                    _overlay = document.getElementById('qrOverlay');
 
-                    if (!modal || !video || !uidInput) {
-                        console.error("QR scanning elements missing in DOM.");
+                    if (!modal || !video || !uidInput || !_overlay) {
+                        console.error("QR/Barcode scanning elements missing in DOM.");
                         return;
+                    }
+
+                    // Setup overlay size and context
+                    _overlay.width = video.clientWidth || 640;
+                    _overlay.height = video.clientHeight || 480;
+                    _overlayCtx = _overlay.getContext('2d');
+
+                    // offscreen capture canvas (match video size when available)
+                    _captureCanvas = document.createElement('canvas');
+                    _captureCtx = _captureCanvas.getContext('2d');
+
+                    // Prefer native BarcodeDetector when available
+                    if ('BarcodeDetector' in window) {
+                        try {
+                            const supported = await BarcodeDetector.getSupportedFormats();
+                            // request common formats plus qr_code
+                            _barcodeDetector = new BarcodeDetector({ formats: supported });
+                        } catch (e) {
+                            // fallback: create with some common formats
+                            try {
+                                _barcodeDetector = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128','code_39','qr_code','upc_a','upc_e'] });
+                            } catch (err) {
+                                _barcodeDetector = null;
+                            }
+                        }
                     }
 
                     // Try to access camera
                     try {
-                        _stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                        // if user has previously selected a device, use it; otherwise request default (facingMode)
+                        const cameraSelect = document.getElementById('qrCameraSelect');
+                        const preferredId = cameraSelect && cameraSelect.value ? cameraSelect.value : null;
+                        if (preferredId) {
+                            _stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: preferredId } } });
+                        } else {
+                            _stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                        }
                         video.srcObject = _stream;
-                        modal.classList.remove("hidden");
-                        modal.classList.add("flex");
+                        modal.classList.remove('hidden');
+                        modal.classList.add('flex');
                         await video.play();
 
-                        _canvas = document.createElement("canvas");
-                        _ctx = _canvas.getContext("2d");
+                        // make capture canvas match actual video dimensions
+                        _captureCanvas.width = video.videoWidth || video.clientWidth || 640;
+                        _captureCanvas.height = video.videoHeight || video.clientHeight || 480;
+
+                        // match overlay to displayed video size
+                        // compute displayed video bounding box
+                        const rect = video.getBoundingClientRect();
+                        _overlay.width = rect.width;
+                        _overlay.height = rect.height;
+                        _overlay.style.width = rect.width + 'px';
+                        _overlay.style.height = rect.height + 'px';
+
                         _scanning = true;
+                        _scanLineY = 0;
+
+                        // After we have camera permission/stream, populate camera list so labels show
+                        await populateCameraList();
+                        // set current device id from active track if not already set
+                        try {
+                            const track = _stream.getVideoTracks()[0];
+                            const settings = track.getSettings();
+                            _currentDeviceId = _currentDeviceId || (settings && settings.deviceId) || document.getElementById('qrCameraSelect')?.value || null;
+                        } catch (e) {}
+
+                        // If native BarcodeDetector isn't available, try starting ZXing continuous decode as fallback
+                        if (!_barcodeDetector && (window.BrowserMultiFormatReader || (window.ZXing && window.ZXing.BrowserMultiFormatReader))) {
+                            try {
+                                const ReaderClass = window.BrowserMultiFormatReader || (window.ZXing && window.ZXing.BrowserMultiFormatReader);
+                                _zxReader = new ReaderClass();
+                                // decodeFromVideoDevice will attach to the video element id and call callback on results
+                                // pass the current device id if available
+                                const deviceArg = _currentDeviceId || null;
+                                _zxReader.decodeFromVideoDevice(deviceArg, 'qrVideo', (result, err) => {
+                                    if (result && result.text) {
+                                        uidInput.value = result.text;
+                                        uidInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                        // stop ZXing reader and our scanner
+                                        try { _zxReader.reset(); } catch (e) {}
+                                        stopScan();
+                                    }
+                                });
+                            } catch (e) {
+                                console.warn('ZXing start failed', e);
+                                _zxReader = null;
+                            }
+                        }
+
                         scanLoop(video, uidInput);
                     } catch (err) {
-                        console.error("Camera access error:", err);
-                        alert("Unable to access camera. Please check permissions or use HTTPS/localhost.");
+                        console.error('Camera access error:', err);
+                        alert('Unable to access camera. Please check permissions or use HTTPS/localhost.');
                         cleanup();
                     }
                 }
 
-                function scanLoop(video, uidInput) {
+                async function scanLoop(video, uidInput) {
                     if (!_scanning) return;
 
-                    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                        _canvas.width = video.videoWidth;
-                        _canvas.height = video.videoHeight;
-                        _ctx.drawImage(video, 0, 0, _canvas.width, _canvas.height);
-                        const imageData = _ctx.getImageData(0, 0, _canvas.width, _canvas.height);
-                        const code = jsQR(imageData.data, imageData.width, imageData.height);
+                    // draw current frame into offscreen canvas
+                    try {
+                        _captureCanvas.width = video.videoWidth || _captureCanvas.width;
+                        _captureCanvas.height = video.videoHeight || _captureCanvas.height;
+                        _captureCtx.drawImage(video, 0, 0, _captureCanvas.width, _captureCanvas.height);
+                    } catch (e) {
+                        // video may not be ready yet
+                    }
 
-                        if (code && code.data) {
-                            uidInput.value = code.data;
-                            uidInput.dispatchEvent(new Event("input", { bubbles: true }));
-                            stopScan();
-                            return;
+                    // clear overlay
+                    _overlayCtx.clearRect(0, 0, _overlay.width, _overlay.height);
+
+                    // draw animated scan line
+                    drawScanLine(_overlayCtx, _overlay.width, _overlay.height);
+
+                    let found = false;
+
+                    // Try BarcodeDetector first (works for many 1D/2D codes including QR in supported browsers)
+                    if (_barcodeDetector) {
+                        try {
+                            // Some implementations accept the video element directly
+                            const barResults = await _barcodeDetector.detect(video);
+                            if (barResults && barResults.length) {
+                                barResults.forEach(res => {
+                                    drawBarcodeResult(res, _overlayCtx, video, _captureCanvas);
+                                    // set value from rawValue or rawData
+                                    if (res.rawValue) {
+                                        uidInput.value = res.rawValue;
+                                        uidInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                        found = true;
+                                    }
+                                });
+                            }
+                        } catch (err) {
+                            // try detecting using image data fallback
+                            try {
+                                const imgBitmap = await createImageBitmap(_captureCanvas);
+                                const barResults = await _barcodeDetector.detect(imgBitmap);
+                                if (barResults && barResults.length) {
+                                    barResults.forEach(res => {
+                                        drawBarcodeResult(res, _overlayCtx, video, _captureCanvas);
+                                        if (res.rawValue) {
+                                            uidInput.value = res.rawValue;
+                                            uidInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                            found = true;
+                                        }
+                                    });
+                                }
+                            } catch (e) {
+                                // ignore barcode detector errors
+                            }
                         }
                     }
 
-                    requestAnimationFrame(() => scanLoop(video, uidInput));
+                    // If not found and jsQR is available, attempt QR decode (jsQR is good at QR location)
+                    if (!found && typeof jsQR === 'function') {
+                        try {
+                            const imageData = _captureCtx.getImageData(0, 0, _captureCanvas.width, _captureCanvas.height);
+                            const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'attemptBoth' });
+                            if (code && code.data) {
+                                // Draw polygon obtained from jsQR (corner points are in image coordinates)
+                                drawJsQrLocation(code.location, _overlayCtx, video, _captureCanvas);
+                                uidInput.value = code.data;
+                                uidInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                found = true;
+                            }
+                        } catch (e) {
+                            // ignore
+                        }
+                    }
+
+                        // If still not found and ZXing is available but we didn't start continuous reader, try a single-frame decode
+                        if (!found && !_barcodeDetector && !_zxReader && (window.BrowserMultiFormatReader || (window.ZXing && window.ZXing.BrowserMultiFormatReader))) {
+                            try {
+                                const ReaderClass = window.BrowserMultiFormatReader || (window.ZXing && window.ZXing.BrowserMultiFormatReader);
+                                const singleReader = new ReaderClass();
+                                // some versions expose decodeFromImage or decodeFromCanvas; try decodeOnceFromVideoElement if exists
+                                if (typeof singleReader.decodeFromVideoElement === 'function') {
+                                    // not continuous, attempt once
+                                }
+                                // attempt decode from canvas image - use dataURL fallback approach
+                                singleReader.decodeFromConstraints ? singleReader.decodeFromConstraints({ video: {} }, 'qrVideo') : null;
+                            } catch (e) {
+                                // ignore single-frame ZXing errors
+                            }
+                        }
+
+                    if (found) {
+                        // optionally stop scanning immediately after successful detection
+                        stopScan();
+                        return;
+                    }
+
+                    _animationFrame = requestAnimationFrame(() => scanLoop(video, uidInput));
+                }
+
+                // Populate camera select dropdown with available video input devices
+                async function populateCameraList() {
+                    const select = document.getElementById('qrCameraSelect');
+                    const refreshBtn = document.getElementById('qrCameraRefresh');
+                    if (!select) return;
+                    try {
+                        const devices = await navigator.mediaDevices.enumerateDevices();
+                        const videoInputs = devices.filter(d => d.kind === 'videoinput');
+                        // clear existing
+                        select.innerHTML = '';
+                        videoInputs.forEach((d, idx) => {
+                            const option = document.createElement('option');
+                            option.value = d.deviceId;
+                            option.textContent = d.label || `Camera ${idx + 1}`;
+                            select.appendChild(option);
+                        });
+                        // attach change handler to switch camera
+                        select.onchange = async function() {
+                            _currentDeviceId = select.value || null;
+                            if (!_scanning) return;
+                            // restart stream with selected device
+                            try {
+                                // stop existing ZXing reader if any
+                                if (_zxReader && typeof _zxReader.reset === 'function') {
+                                    try { _zxReader.reset(); } catch(e){}
+                                    _zxReader = null;
+                                }
+                                if (_stream) {
+                                    _stream.getTracks().forEach(t => t.stop());
+                                    _stream = null;
+                                }
+                                const video = document.getElementById('qrVideo');
+                                const uidInput = document.getElementById('updateUid');
+                                // open new stream with deviceId
+                                _stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: _currentDeviceId } } });
+                                video.srcObject = _stream;
+                                await video.play();
+                                // restart ZXing if needed
+                                if (!_barcodeDetector && (window.BrowserMultiFormatReader || (window.ZXing && window.ZXing.BrowserMultiFormatReader))) {
+                                    try {
+                                        const ReaderClass = window.BrowserMultiFormatReader || (window.ZXing && window.ZXing.BrowserMultiFormatReader);
+                                        _zxReader = new ReaderClass();
+                                        _zxReader.decodeFromVideoDevice(_currentDeviceId, 'qrVideo', (result, err) => {
+                                            if (result && result.text) {
+                                                uidInput.value = result.text;
+                                                uidInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                                try { _zxReader.reset(); } catch (e) {}
+                                                stopScan();
+                                            }
+                                        });
+                                    } catch(e) { _zxReader = null; }
+                                }
+                            } catch (e) {
+                                console.error('Error switching camera', e);
+                            }
+                        };
+
+                        if (refreshBtn) {
+                            refreshBtn.onclick = () => populateCameraList();
+                        }
+
+                        // if nothing selected yet, keep current device id or pick first
+                        if (!select.value && select.options.length) {
+                            select.value = _currentDeviceId || select.options[0].value;
+                        }
+                    } catch (e) {
+                        console.error('Error enumerating devices', e);
+                    }
+                }
+
+                function drawScanLine(ctx, w, h) {
+                    // animate line between 0..h
+                    if (_scanLineDirection > 0) {
+                        _scanLineY += Math.max(2, Math.round(h / 120));
+                        if (_scanLineY >= h) _scanLineDirection = -1;
+                    } else {
+                        _scanLineY -= Math.max(2, Math.round(h / 120));
+                        if (_scanLineY <= 0) _scanLineDirection = 1;
+                    }
+
+                    // gradient line
+                    const grad = ctx.createLinearGradient(0, _scanLineY - 8, 0, _scanLineY + 8);
+                    grad.addColorStop(0, 'rgba(0, 200, 255, 0)');
+                    grad.addColorStop(0.5, 'rgba(0, 200, 255, 0.9)');
+                    grad.addColorStop(1, 'rgba(0, 200, 255, 0)');
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(0, _scanLineY - 1.5, w, 3);
+                }
+
+                function drawJsQrLocation(location, ctx, video, captureCanvas) {
+                    // jsQR location provides topLeft, topRight, bottomRight, bottomLeft in image coordinates
+                    if (!location) return;
+                    const corners = [location.topLeftCorner, location.topRightCorner, location.bottomRightCorner, location.bottomLeftCorner];
+                    // Need to scale image coords to displayed video size
+                    const sx = captureCanvas.width / video.videoWidth || 1;
+                    const sy = captureCanvas.height / video.videoHeight || 1;
+                    const displayRect = video.getBoundingClientRect();
+                    const scaleX = displayRect.width / (captureCanvas.width || displayRect.width);
+                    const scaleY = displayRect.height / (captureCanvas.height || displayRect.height);
+
+                    ctx.strokeStyle = 'rgba(0,200,120,0.95)';
+                    ctx.lineWidth = Math.max(2, Math.round(Math.min(displayRect.width, displayRect.height) / 200));
+                    ctx.beginPath();
+                    corners.forEach((pt, i) => {
+                        if (!pt) return;
+                        const x = (pt.x / (captureCanvas.width || 1)) * displayRect.width;
+                        const y = (pt.y / (captureCanvas.height || 1)) * displayRect.height;
+                        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                    });
+                    ctx.closePath();
+                    ctx.stroke();
+                }
+
+                function drawBarcodeResult(result, ctx, video, captureCanvas) {
+                    // result may contain boundingBox or cornerPoints depending on implementation
+                    ctx.strokeStyle = 'rgba(255,150,0,0.95)';
+                    ctx.lineWidth = 2;
+                    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                    try {
+                        const displayRect = video.getBoundingClientRect();
+                        if (result.cornerPoints && result.cornerPoints.length) {
+                            ctx.beginPath();
+                            result.cornerPoints.forEach((p, i) => {
+                                const x = (p.x / (captureCanvas.width || p.x)) * displayRect.width;
+                                const y = (p.y / (captureCanvas.height || p.y)) * displayRect.height;
+                                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                            });
+                            ctx.closePath();
+                            ctx.stroke();
+                        } else if (result.boundingBox) {
+                            // boundingBox may be DOMRect or object with x,y,width,height in image coords
+                            const bb = result.boundingBox;
+                            const x = (bb.x / (captureCanvas.width || bb.width)) * displayRect.width;
+                            const y = (bb.y / (captureCanvas.height || bb.height)) * displayRect.height;
+                            const w = (bb.width / (captureCanvas.width || bb.width)) * displayRect.width;
+                            const h = (bb.height / (captureCanvas.height || bb.height)) * displayRect.height;
+                            ctx.strokeRect(x, y, w, h);
+                            // label
+                            const label = result.rawValue || result.rawBytes || '';
+                            if (label) {
+                                const pad = 6;
+                                ctx.fillRect(x, y - 22, Math.min(displayRect.width - 10, String(label).length * 10 + pad), 20);
+                                ctx.fillStyle = '#00C8FF';
+                                ctx.font = '12px sans-serif';
+                                ctx.fillText(String(label).slice(0, 40), x + 4, y - 8);
+                                ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                            }
+                        }
+                    } catch (e) {
+                        // ignore drawing errors
+                    }
                 }
 
                 function stopScan() {
@@ -437,22 +769,37 @@
                 }
 
                 function cleanup() {
-                    const modal = document.getElementById("qrScannerModal");
-                    const video = document.getElementById("qrVideo");
+                    const modal = document.getElementById('qrScannerModal');
+                    const video = document.getElementById('qrVideo');
 
-                    if (modal) modal.classList.add("hidden");
+                    if (modal) modal.classList.add('hidden');
+                    if (_animationFrame) {
+                        cancelAnimationFrame(_animationFrame);
+                        _animationFrame = null;
+                    }
                     if (_stream) {
                         _stream.getTracks().forEach(t => t.stop());
                         _stream = null;
                     }
                     if (video) {
-                        video.pause();
-                        video.srcObject = null;
+                        try { video.pause(); } catch(e){}
+                        try { video.srcObject = null; } catch(e){}
                     }
-                    if (_canvas) {
-                        _canvas.remove();
-                        _canvas = null;
+                    if (_captureCanvas) {
+                        try { _captureCanvas.remove(); } catch (e) {}
+                        _captureCanvas = null;
+                        _captureCtx = null;
                     }
+                    if (_overlay) {
+                        try { _overlayCtx.clearRect(0,0,_overlay.width,_overlay.height); } catch(e){}
+                        _overlay = null;
+                        _overlayCtx = null;
+                    }
+                    if (_zxReader && typeof _zxReader.reset === 'function') {
+                        try { _zxReader.reset(); } catch(e) {}
+                        _zxReader = null;
+                    }
+                    _barcodeDetector = null;
                 }
 
                 window.startScan = startScan;

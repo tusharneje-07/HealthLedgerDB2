@@ -28,6 +28,7 @@ urlpatterns = [
     path('print/<str:invoice_num>/', views.PRINT_INVOICE, name='print_invoice'),
     path('login/', views.LOGIN, name='login'),
     path('logout/', views.LOGOUT, name='logout'),
+    path('logout/<str:status>/', views.LOGOUT_HARD, name='logout_hard'),
     
     # User Paths
     path('login/patient/', views.user_login, name='user_login'),
@@ -40,6 +41,8 @@ urlpatterns = [
     path('api/get_data_by_uid', views.get_data_by_uid, name='get_data_by_uid'),
     path('api/get_data_by_invoice_id', views.get_data_by_invoice_id, name='get_data_by_invoice_id'),
     path('api/update_payment/', views.update_payment, name='update_payment'),
+    path('api/initiate_payment/', views.initiate_payment, name='initiate_payment'),
+    path('api/verify_payment/', views.verify_payment, name='verify_payment'),
     path('api/load_data/', views.load_data, name='load_data'),
     path('api/recent-activity/', views.recent_activity, name='recent_activity'),
     path('api/get_stats/', views.getstats, name='get_stats'),
@@ -47,6 +50,7 @@ urlpatterns = [
     path('api/invoice/<str:invoice_num>/', views.detailed_invoice_view, name='detailed_invoice'),
     path('api/records/', views.load_data, name='api_records'),
     path('api/records/count/', views.records_count, name='api_records_count'),
+    path('api/user/payment/<str:amount>/', views.user_payment, name='api_user_payment'),
     
     # User APIs
     path('api/user/stats/<str:user_email>/', views.user_stats, name='user_stats'),
