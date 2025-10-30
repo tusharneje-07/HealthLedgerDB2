@@ -254,12 +254,13 @@
                     document.getElementById('paymentContainer').style.display = 'none';
                     document.getElementById('successContainer').style.display = 'block';
 
-                    // Notify parent window
+                    // Notify parent window with payment ID
                     if (window.opener) {
                         window.opener.postMessage({
                             type: 'PAYMENT_SUCCESS',
                             invoice_num: invoiceNum,
-                            amount: amount
+                            amount: amount,
+                            payment_id: response.razorpay_payment_id
                         }, '*');
                     }
 

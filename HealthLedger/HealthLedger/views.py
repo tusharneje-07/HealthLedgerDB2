@@ -484,6 +484,7 @@ def update_payment(request):
     invoice_num = request.GET.get("invoice_num")
     paid_amount = request.GET.get("paid_amount")
     total_amount = request.GET.get("total_amount")
+    by = request.GET.get("by", "mode:cash|id:null")  # Default to cash payment
 
     # ✅ 1. Input validation
     if not uid or not invoice_num or not paid_amount:
@@ -499,11 +500,25 @@ def update_payment(request):
             {"error": "paid_amount and total_amount must be numeric"}, status=400
         )
 
-    # ✅ 2. Precompute values once
+    # ✅ 2. Parse payment method from 'by' parameter
+    payment_mode = "CASH"
+    payment_id = "null"
+    
+    if by:
+        parts = by.split('|')
+        for part in parts:
+            if ':' in part:
+                key, value = part.split(':', 1)
+                if key.strip() == 'mode':
+                    payment_mode = value.strip()
+                elif key.strip() == 'id':
+                    payment_id = value.strip()
+
+    # ✅ 3. Precompute values once
     remaining_amount = max(0, total_amount - paid_amount)
     current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # ✅ 3. Run queries in sequence (minimal overhead)
+    # ✅ 4. Run queries in sequence (minimal overhead)
     # Update register
     update_query = (
         f"UPDATE register "
@@ -515,21 +530,24 @@ def update_payment(request):
     if not success:
         return JsonResponse({"error": f"Failed to update payment: {msg}"}, status=500)
 
-    # Insert into activity
-    log_desc = f"Payment update for {invoice_num}, ₹{paid_amount}/- Paid."
+    if payment_id == "null":
+        payment_id = "N/A"
+    log_desc = f"Payment done for {invoice_num}, ₹{paid_amount}/- Paid by {payment_mode.upper()} (Payment ID: {payment_id})"
     insert_activity_query = (
         "INSERT INTO activity (log_name, log_desc, log_date_time) "
         f"VALUES ('Payment Update', '{log_desc}', '{current_timestamp}')"
     )
     DB2Query.runQuery(insert_activity_query)
 
-    # Insert into INVOICE_LOGS
+    
+    
+    log_remark = f"Payment updated of {invoice_num}, ₹{paid_amount}/- Paid via {payment_mode.upper()} (Payment ID: {payment_id})"
     insert_invoice_query = (
         "INSERT INTO INVOICE_LOGS "
         "(INVOICE_NUMBER, UID, LOG_DATE, AMOUNT, PAID_AMOUNT_ON_DATE, "
-        "REMAINING_AMOUNT_ON_DATE, LOG_REMARK) "
+        "REMAINING_AMOUNT_ON_DATE, LOG_REMARK, PAYMENT_MODE,PAYMENT_ID) "
         f"VALUES ('{invoice_num}', '{uid}', '{current_timestamp}', "
-        f"{total_amount}, {paid_amount}, {remaining_amount}, 'Payment updated')"
+        f"{total_amount}, {paid_amount}, {remaining_amount}, '{log_remark}','{payment_mode.upper()}','{payment_id}')"
     )
     DB2Query.runQuery(insert_invoice_query)
 
@@ -1201,21 +1219,19 @@ def verify_payment(request):
         if not success:
             return JsonResponse({"error": "Failed to update payment in database"}, status=500)
         
-        # Insert into activity log
         log_desc = f"Payment update for {invoice_num}, ₹{paid_amount}/- Paid via Razorpay (Payment ID: {razorpay_payment_id})."
         insert_activity_query = (
             "INSERT INTO activity (log_name, log_desc, log_date_time) "
             f"VALUES ('Razorpay Payment', '{log_desc}', '{current_timestamp}')"
         )
         DB2Query.runQuery(insert_activity_query)
-        
-        # Insert into INVOICE_LOGS
+        log_remark = f"Payment updated of {invoice_num}, ₹{paid_amount}/- Paid via RAZ (Payment ID: {razorpay_payment_id})"
         insert_invoice_query = (
             "INSERT INTO INVOICE_LOGS "
             "(INVOICE_NUMBER, UID, LOG_DATE, AMOUNT, PAID_AMOUNT_ON_DATE, "
-            "REMAINING_AMOUNT_ON_DATE, LOG_REMARK) "
+            "REMAINING_AMOUNT_ON_DATE, LOG_REMARK, PAYMENT_MODE, PAYMENT_ID) "
             f"VALUES ('{invoice_s}', '{uid_s}', '{current_timestamp}', "
-            f"{total_amt}, {paid_amount}, {remaining_amount}, 'Payment via Razorpay - {payment_id_s}')"
+            f"{total_amt}, {paid_amount}, {remaining_amount}, '{log_remark}', 'RAZ', '{payment_id_s}')"
         )
         DB2Query.runQuery(insert_invoice_query)
         

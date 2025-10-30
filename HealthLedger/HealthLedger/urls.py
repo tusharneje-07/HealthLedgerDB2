@@ -41,8 +41,7 @@ urlpatterns = [
     path('api/get_data_by_uid', views.get_data_by_uid, name='get_data_by_uid'),
     path('api/get_data_by_invoice_id', views.get_data_by_invoice_id, name='get_data_by_invoice_id'),
     path('api/update_payment/', views.update_payment, name='update_payment'),
-    path('api/initiate_payment/', views.initiate_payment, name='initiate_payment'),
-    path('api/verify_payment/', views.verify_payment, name='verify_payment'),
+    
     path('api/load_data/', views.load_data, name='load_data'),
     path('api/recent-activity/', views.recent_activity, name='recent_activity'),
     path('api/get_stats/', views.getstats, name='get_stats'),
@@ -54,6 +53,8 @@ urlpatterns = [
     
     # Razorpay Payment Window
     path('razorpay_payment/', views.razorpay_payment_window, name='razorpay_payment_window'),
+    path('api/initiate_payment/', views.initiate_payment, name='initiate_payment'),
+    path('api/verify_payment/', views.verify_payment, name='verify_payment'),
     
     # User APIs
     path('api/user/stats/<str:user_email>/', views.user_stats, name='user_stats'),

@@ -907,6 +907,10 @@
                     total_amount: document.getElementById('totalAmount').value.replace('₹','')
                 };
 
+                // Get payment method from localStorage (default to cash)
+                const paymentMethod = localStorage.getItem('payment_method') || 'cash';
+                const paymentId = localStorage.getItem('payment_id') || 'null';
+
                 // Show message container
                 const messageContainer = document.getElementById('updateMessageContainer');
                 const successMessage = document.getElementById('updateSuccessMessage');
@@ -925,11 +929,17 @@
                 refreshButton.classList.add('opacity-70', 'cursor-not-allowed','animate-pulse', 'bg-green-900/30');
                 refreshButton.textContent = 'Updating...';
 
+                // Build the by parameter
+                const byParam = `mode:${paymentMethod}|id:${paymentId}`;
 
                 // Make fetch request to Django API
-                fetch(`http://127.0.0.1:8000/api/update_payment/?uid=${encodeURIComponent(updateData.uid)}&invoice_num=${encodeURIComponent(updateData.invoiceNum)}&paid_amount=${encodeURIComponent(updateData.paid_amount)}&total_amount=${encodeURIComponent(updateData.total_amount)}`)
+                fetch(`http://127.0.0.1:8000/api/update_payment/?uid=${encodeURIComponent(updateData.uid)}&invoice_num=${encodeURIComponent(updateData.invoiceNum)}&paid_amount=${encodeURIComponent(updateData.paid_amount)}&total_amount=${encodeURIComponent(updateData.total_amount)}&by=${encodeURIComponent(byParam)}`)
                     .then(res => res.json())
                     .then(data => {
+                        // Clear payment method from localStorage after request
+                        localStorage.removeItem('payment_method');
+                        localStorage.removeItem('payment_id');
+
                         if (data.message) {
                             // Success
                             successMessage.textContent = data.message;
@@ -971,6 +981,10 @@
                         }
                     })
                     .catch(err => {
+                        // Clear payment method on error too
+                        localStorage.removeItem('payment_method');
+                        localStorage.removeItem('payment_id');
+
                         errorMessage.textContent = "Network error. Please try again.";
                         errorMessage.classList.remove('hidden');
                         successMessage.classList.add('hidden');
@@ -1283,6 +1297,10 @@
             // Listen for payment completion message from popup window
             window.addEventListener('message', function(event) {
                 if (event.data.type === 'PAYMENT_SUCCESS') {
+                    // Store payment method and ID in localStorage
+                    localStorage.setItem('payment_method', 'RAZ');
+                    localStorage.setItem('payment_id', event.data.payment_id || 'razorpay_payment');
+
                     // Auto-fill the payment amount
                     document.getElementById('updateAmount').value = event.data.amount;
                     
@@ -1293,12 +1311,18 @@
                     setTimeout(function() {
                         document.getElementById('updateForm').dispatchEvent(new Event('submit'));
                     }, 500);
+                } else if (event.data.type === 'PAYMENT_CANCELLED') {
+                    alert('Payment was cancelled. Please try again.');
                 }
             });
 
             // Initialize button state on page load
             window.addEventListener('DOMContentLoaded', function() {
                 updateRazorpayButtonState();
+                
+                // Clear any leftover payment method data on page load
+                localStorage.removeItem('payment_method');
+                localStorage.removeItem('payment_id');
             });
         </script>
     </body>
