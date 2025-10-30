@@ -42,6 +42,7 @@ urlpatterns = [
     path('api/get_data_by_invoice_id', views.get_data_by_invoice_id, name='get_data_by_invoice_id'),
     path('api/update_payment/', views.update_payment, name='update_payment'),
     
+    
     path('api/load_data/', views.load_data, name='load_data'),
     path('api/recent-activity/', views.recent_activity, name='recent_activity'),
     path('api/get_stats/', views.getstats, name='get_stats'),
@@ -58,6 +59,16 @@ urlpatterns = [
     
     # User APIs
     path('api/user/stats/<str:user_email>/', views.user_stats, name='user_stats'),
+    
+    # Analytics Dashboard
+    path('analytics/', views.analytics_dashboard, name='analytics_dashboard'),
+    path('api/financial_summary/', views.api_financial_summary, name='api_financial_summary'),
+    path('api/patient_stats/', views.api_patient_stats, name='api_patient_stats'),
+    path('api/activity_trends/', views.api_activity_trends, name='api_activity_trends'),
+    path('api/payment_modes/', views.api_payment_modes, name='api_payment_modes'),
+    path('api/patients_list/', views.api_patients_list, name='api_patients_list'),
+    path('api/ai_insights/', views.api_ai_insights, name='api_ai_insights'),
+    path('api/generate_report/', views.api_generate_report, name='api_generate_report'),
 
     # Warning Handling
     path('.well-known/appspecific/com.chrome.devtools.json', lambda r: HttpResponse('{}', content_type='application/json')),

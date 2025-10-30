@@ -67,11 +67,7 @@ def runParallelQueries(queries, max_workers=None):
             errors = "; ".join([r[1] for r in failed])
             return False, f"Some queries failed: {errors}"
         
-        # Combine all results
-        combined = []
-        for success, data in results:
-            combined.extend(data)
-        
-        return True, combined
+        # Return list of results (one per query) instead of combined
+        return True, [data for success, data in results]
     except Exception as e:
         return False, str(e)

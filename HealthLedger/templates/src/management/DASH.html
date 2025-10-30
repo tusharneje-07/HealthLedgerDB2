@@ -31,6 +31,7 @@
                 <!-- Navigation Links -->
                 <div class="hidden md:flex space-x-6">
                     <a class="text-zinc-100 hover:text-zinc-300 transition-colors duration-200 font-medium">Dashboard</a>
+                    <a class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/analytics'" style="cursor: pointer;">Analytics</a>
                     <a class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/view_all'" style="cursor: pointer;">Records</a>
                     <a href="#" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/logout'">SleepOut</a>
 
@@ -71,7 +72,7 @@
                     <div>
                         <p class="text-sm font-medium text-zinc-400">Total Records</p>
                         <p class="text-3xl font-semibold text-zinc-100 mt-2" id="total_records">----</p>
-                        <p class="text-xs text-green-400 mt-2">+12% from last month</p>
+                        <p class="text-xs text-green-400 mt-2">Unique Records</p>
                     </div>
                     <div class="w-12 h-12 bg-zinc-700 rounded-lg flex items-center justify-center">
                         <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -87,7 +88,7 @@
                     <div>
                         <p class="text-sm font-medium text-zinc-400">Total Revenue</p>
                         <p class="text-3xl font-semibold text-zinc-100 mt-2" id="total_revenue">----</p>
-                        <p class="text-xs text-green-400 mt-2">+8% from last month</p>
+                        <p class="text-xs text-green-400 mt-2">Total Revenue</p>
                     </div>
                     <div class="w-12 h-12 bg-zinc-700 rounded-lg flex items-center justify-center">
                         <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -103,7 +104,7 @@
                     <div>
                         <p class="text-sm font-medium text-zinc-400">Total Pending Amount</p>
                         <p class="text-3xl font-semibold text-zinc-100 mt-2" id="total_pending_amount">----</p>
-                        <p class="text-xs text-yellow-400 mt-2">Requires attention</p>
+                        <p class="text-xs text-yellow-400 mt-2">Yet to Receive</p>
                     </div>
                     <div class="w-12 h-12 bg-zinc-700 rounded-lg flex items-center justify-center">
                         <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -119,7 +120,7 @@
                     <div>
                         <p class="text-sm font-medium text-zinc-400">Completed</p>
                         <p class="text-3xl font-semibold text-zinc-100 mt-2" id="total_paid_customers">----</p>
-                        <p class="text-xs text-green-400 mt-2" id="completion_rate">88.6% completion rate</p>
+                        <p class="text-xs text-green-400 mt-2" id="completion_rate">Total completion rate</p>
                     </div>
                     <div class="w-12 h-12 bg-zinc-700 rounded-lg flex items-center justify-center">
                         <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -222,14 +223,14 @@
                         <span>Update Payment Details</span>
                     </button>
 
-                    <button class="w-full px-4 py-3 bg-zinc-700 hover:bg-zinc-600 text-zinc-400 hover:text-zinc-100 font-medium rounded-lg transition-all duration-200 border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-600 focus:ring-offset-zinc-800 flex items-center justify-center space-x-2">
+                    {% comment %} <button class="w-full px-4 py-3 bg-zinc-700 hover:bg-zinc-600 text-zinc-400 hover:text-zinc-100 font-medium rounded-lg transition-all duration-200 border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-600 focus:ring-offset-zinc-800 flex items-center justify-center space-x-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
                         </svg>
                         <span>Process Payment</span>
-                    </button>
+                    </button> {% endcomment %}
 
-                    <button class="w-full px-4 py-3 bg-zinc-700 hover:bg-zinc-600 text-zinc-400 hover:text-zinc-100 font-medium rounded-lg transition-all duration-200 border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-600 focus:ring-offset-zinc-800 flex items-center justify-center space-x-2">
+                    <button onclick="window.location.href='/analytics'" class="w-full px-4 py-3 bg-zinc-700 hover:bg-zinc-600 text-zinc-400 hover:text-zinc-100 font-medium rounded-lg transition-all duration-200 border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-600 focus:ring-offset-zinc-800 flex items-center justify-center space-x-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                         </svg>

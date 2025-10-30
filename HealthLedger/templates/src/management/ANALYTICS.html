@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics Dashboard - HealthLedger</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            background-color: #09090b;
+            color: #fafafa;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+        .kpi-card {
+            background: linear-gradient(135deg, #18181b 0%, #27272a 100%);
+        }
+        .spinner {
+            border: 3px solid #27272a;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-zinc-900 text-zinc-100">
+    
+    <!-- Navbar -->
+    <nav class="bg-zinc-800 border-b border-zinc-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <div class="text-xl font-semibold text-zinc-100">
+                        HealthLedger
+                    </div>
+                </div>
+                <div class="hidden md:flex space-x-6">
+                    <a class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/'">Dashboard</a>
+                    <a class="text-zinc-100 hover:text-zinc-300 transition-colors duration-200 font-medium" onclick="window.location.href='/analytics'" style="cursor: pointer;">Analytics</a>
+                    <a class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/view_all'" style="cursor: pointer;">Records</a>
+                    <a href="#" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/logout'">SleepOut</a>
+
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                        </svg>
+                    </button>
+                    <div class="flex items-center space-x-2">
+                        <div class="w-8 h-8 bg-zinc-700 rounded-full flex items-center justify-center text-sm font-medium">
+                            <img width="94" height="94" src="https://img.icons8.com/3d-fluency/94/settings-2.png" alt="settings-2"/>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <!-- Page Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-zinc-100">Hospital Invoice Analytics</h1>
+            <p class="text-zinc-400 mt-2">Comprehensive financial and operational insights</p>
+        </div>
+
+        <!-- KPI Cards Section -->
+        <div id="kpi-section" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- Total Revenue -->
+            <div class="kpi-card rounded-lg border border-zinc-700 p-6 shadow-lg fade-in">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-medium text-zinc-400">Total Revenue</h3>
+                    <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <div class="text-3xl font-bold text-zinc-100" id="total-revenue">₹0.00</div>
+                <p class="text-xs text-zinc-500 mt-2">All-time invoices</p>
+            </div>
+
+            <!-- Total Collected -->
+            <div class="kpi-card rounded-lg border border-zinc-700 p-6 shadow-lg fade-in">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-medium text-zinc-400">Collected Payments</h3>
+                    <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <div class="text-3xl font-bold text-zinc-100" id="total-collected">₹0.00</div>
+                <p class="text-xs text-zinc-500 mt-2">Successfully received</p>
+            </div>
+
+            <!-- Outstanding Balance -->
+            <div class="kpi-card rounded-lg border border-zinc-700 p-6 shadow-lg fade-in">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-medium text-zinc-400">Outstanding Balance</h3>
+                    <svg class="w-6 h-6 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <div class="text-3xl font-bold text-zinc-100" id="outstanding-balance">₹0.00</div>
+                <p class="text-xs text-zinc-500 mt-2">Pending payments</p>
+            </div>
+
+            <!-- Total Patients -->
+            <div class="kpi-card rounded-lg border border-zinc-700 p-6 shadow-lg fade-in">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-medium text-zinc-400">Total Patients</h3>
+                    <svg class="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                    </svg>
+                </div>
+                <div class="text-3xl font-bold text-zinc-100" id="total-patients">0</div>
+                <p class="text-xs text-zinc-500 mt-2">Unique patients</p>
+            </div>
+        </div>
+
+        <!-- AI Insights Section -->
+        <div id="ai-insights-section" class="mb-8 fade-in">
+            <div class="bg-gradient-to-br from-blue-900/20 to-purple-900/20 rounded-lg border border-blue-700/50 p-6 shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center space-x-3">
+                        <svg class="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                        </svg>
+                        <h2 class="text-xl font-bold text-zinc-100">AI-Powered Insights</h2>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button id="regenerate-insights-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors duration-200">
+                            <span class="flex items-center space-x-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                </svg>
+                                <span>Regenerate</span>
+                            </span>
+                        </button>
+                        <button id="show-prompt-toggle" class="hidden px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-sm font-medium transition-colors duration-200">
+                            Show Prompt
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Loading State -->
+                <div id="insights-loading" class="hidden flex items-center justify-center py-8">
+                    <div class="spinner"></div>
+                    <span class="ml-3 text-zinc-400">Analyzing data with AI...</span>
+                </div>
+
+                <!-- Insights Content -->
+                <div id="insights-content" class="space-y-4">
+                    <div id="insights-text" class="text-zinc-300 leading-relaxed">
+                        <p class="italic text-zinc-500">Click "Regenerate" to generate AI-powered insights based on current analytics data.</p>
+                    </div>
+
+                    <!-- Highlights -->
+                    <div id="insights-highlights" class="hidden mt-4">
+                        <h3 class="text-sm font-semibold text-zinc-400 mb-2">Key Highlights</h3>
+                        <ul id="highlights-list" class="space-y-2">
+                            <!-- Dynamically populated -->
+                        </ul>
+                    </div>
+
+                    <!-- Confidence Score -->
+                    <div id="insights-confidence" class="hidden mt-4 flex items-center space-x-2">
+                        <span class="text-sm text-zinc-500">Confidence:</span>
+                        <div class="flex-1 bg-zinc-700 rounded-full h-2 max-w-xs">
+                            <div id="confidence-bar" class="bg-blue-500 h-2 rounded-full" style="width: 0%"></div>
+                        </div>
+                        <span id="confidence-text" class="text-sm text-zinc-400">0%</span>
+                    </div>
+
+                    <!-- Copy to Clipboard -->
+                    <div class="mt-4 flex space-x-2">
+                        <button id="copy-insights-btn" class="hidden px-3 py-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded text-sm transition-colors duration-200">
+                            Copy Insights
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Debug/Raw Response (Admin Only) -->
+                <div id="insights-raw" class="hidden mt-4 pt-4 border-t border-zinc-700">
+                    <details class="text-xs">
+                        <summary class="cursor-pointer text-zinc-500 hover:text-zinc-400">Raw Model Response (Debug)</summary>
+                        <pre id="raw-response" class="mt-2 p-3 bg-zinc-900 rounded text-zinc-400 overflow-x-auto"></pre>
+                    </details>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            
+            <!-- Monthly Revenue Trend -->
+            <div id="revenue-trend-section" class="bg-zinc-800 rounded-lg border border-zinc-700 p-6 shadow-lg fade-in">
+                <h3 class="text-lg font-semibold text-zinc-100 mb-4">Monthly Revenue Trend</h3>
+                <div class="chart-container">
+                    <canvas id="revenue-trend-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Payment Mode Distribution -->
+            <div id="payment-modes-section" class="bg-zinc-800 rounded-lg border border-zinc-700 p-6 shadow-lg fade-in">
+                <h3 class="text-lg font-semibold text-zinc-100 mb-4">Payment Mode Distribution</h3>
+                <div class="chart-container">
+                    <canvas id="payment-modes-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Invoice Volume Trend -->
+            <div id="invoice-volume-section" class="bg-zinc-800 rounded-lg border border-zinc-700 p-6 shadow-lg fade-in">
+                <h3 class="text-lg font-semibold text-zinc-100 mb-4">Invoice Volume Trend</h3>
+                <div class="chart-container">
+                    <canvas id="invoice-volume-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Top Paying Patients -->
+            <div id="top-patients-section" class="bg-zinc-800 rounded-lg border border-zinc-700 p-6 shadow-lg fade-in">
+                <h3 class="text-lg font-semibold text-zinc-100 mb-4">Top 10 Paying Patients</h3>
+                <div class="chart-container">
+                    <canvas id="top-patients-chart"></canvas>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Patients List Table -->
+        <div id="patients-list-section" class="bg-zinc-800 rounded-lg border border-zinc-700 p-6 shadow-lg fade-in mb-8">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-zinc-100">All Patients</h3>
+                <div class="flex space-x-2 hidden">
+                    <button id="filter-all" class="px-3 py-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded text-sm transition-colors duration-200">All</button>
+                    <button id="filter-paid" class="px-3 py-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded text-sm transition-colors duration-200">Paid</button>
+                    <button id="filter-pending" class="px-3 py-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded text-sm transition-colors duration-200">Pending</button>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left">
+                    <thead class="text-xs text-zinc-400 uppercase bg-zinc-900">
+                        <tr>
+                            <th class="px-4 py-3">UID</th>
+                            <th class="px-4 py-3">Patient Name</th>
+                            <th class="px-4 py-3">Invoice Number</th>
+                            <th class="px-4 py-3">Date</th>
+                            <th class="px-4 py-3">Amount</th>
+                            <th class="px-4 py-3">Paid</th>
+                            <th class="px-4 py-3">Remaining</th>
+                            <th class="px-4 py-3">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="patients-list-body" class="text-zinc-300">
+                        <!-- Dynamically populated -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="patients-loading" class="text-center py-8 text-zinc-500">
+                Loading patients data...
+            </div>
+        </div>
+
+        <!-- Activity Logs Table -->
+        <div id="activity-logs-section" class="bg-zinc-800 rounded-lg border border-zinc-700 p-6 shadow-lg fade-in mb-8">
+            <h3 class="text-lg font-semibold text-zinc-100 mb-4">Recent System Activity</h3>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left">
+                    <thead class="text-xs text-zinc-400 uppercase bg-zinc-900">
+                        <tr>
+                            <th class="px-4 py-3">Date/Time</th>
+                            <th class="px-4 py-3">Activity</th>
+                            <th class="px-4 py-3">Description</th>
+                        </tr>
+                    </thead>
+                    <tbody id="activity-logs-body" class="text-zinc-300">
+                        <!-- Dynamically populated -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Floating Export Button -->
+    <button id="export-report-btn" class="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-2xl flex items-center justify-center transition-all duration-200 hover:scale-110 z-40">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+    </button>
+
+    <!-- Export Modal -->
+    <div id="export-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-zinc-800 rounded-lg border border-zinc-700 p-6 max-w-md w-full shadow-2xl">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xl font-bold text-zinc-100">Export Report</h3>
+                <button id="close-modal-btn" class="text-zinc-400 hover:text-zinc-100">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Section Selection -->
+            <div class="mb-4">
+                <h4 class="text-sm font-semibold text-zinc-300 mb-2">Select Sections</h4>
+                <div class="space-y-2 max-h-64 overflow-y-auto">
+                    <label class="flex items-center space-x-2 text-zinc-300 cursor-pointer">
+                        <input type="checkbox" class="section-checkbox" value="kpi-section" checked>
+                        <span>KPI Summary</span>
+                    </label>
+                    <label class="flex items-center space-x-2 text-zinc-300 cursor-pointer">
+                        <input type="checkbox" class="section-checkbox" value="revenue-trend-section" checked>
+                        <span>Monthly Revenue Trend</span>
+                    </label>
+                    <label class="flex items-center space-x-2 text-zinc-300 cursor-pointer">
+                        <input type="checkbox" class="section-checkbox" value="payment-modes-section" checked>
+                        <span>Payment Mode Distribution</span>
+                    </label>
+                    <label class="flex items-center space-x-2 text-zinc-300 cursor-pointer">
+                        <input type="checkbox" class="section-checkbox" value="invoice-volume-section" checked>
+                        <span>Invoice Volume Trend</span>
+                    </label>
+                    <label class="flex items-center space-x-2 text-zinc-300 cursor-pointer">
+                        <input type="checkbox" class="section-checkbox" value="top-patients-section" checked>
+                        <span>Top Paying Patients</span>
+                    </label>
+                    <label class="flex items-center space-x-2 text-zinc-300 cursor-pointer">
+                        <input type="checkbox" class="section-checkbox" value="patients-list-section" checked>
+                        <span>All Patients List</span>
+                    </label>
+                    <label class="flex items-center space-x-2 text-zinc-300 cursor-pointer">
+                        <input type="checkbox" class="section-checkbox" value="activity-logs-section" checked>
+                        <span>Activity Logs</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Options -->
+            <div class="mb-4">
+                <h4 class="text-sm font-semibold text-zinc-300 mb-2">Page Orientation</h4>
+                <div class="space-y-2">
+                    <label class="flex items-center space-x-2 text-zinc-300">
+                        <input type="radio" name="orientation" value="portrait" checked>
+                        <span>Portrait (A4)</span>
+                    </label>
+                    <label class="flex items-center space-x-2 text-zinc-300">
+                        <input type="radio" name="orientation" value="landscape">
+                        <span>Landscape (A4)</span>
+                    </label>
+                </div>
+                <div class="mt-3 p-3 bg-zinc-900/50 rounded border border-zinc-700 text-xs text-zinc-400">
+                    <div class="flex items-start space-x-2">
+                        <svg class="w-4 h-4 mt-0.5 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        <span class="flex-1">
+                            <strong class="text-green-400">Print-ready PDF</strong>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex space-x-3">
+                <button id="generate-pdf-btn" class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors duration-200">
+                    Generate & Download
+                </button>
+            </div>
+
+            <!-- Loading State -->
+            <div id="export-loading" class="hidden mt-4 flex items-center justify-center">
+                <div class="spinner"></div>
+                <span class="ml-3 text-zinc-400">Generating PDF...</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global chart instances
+        let charts = {};
+
+        // Helper: Format currency
+        function formatCurrency(amount) {
+            return '₹' + parseFloat(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        // Helper: Format date
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+
+        // Helper: Convert markdown to HTML
+        function markdownToHTML(text) {
+            if (!text) return '';
+            
+            // Convert headers
+            text = text.replace(/^### (.*$)/gim, '<h3 class="text-base font-semibold text-zinc-100 mt-4 mb-2">$1</h3>');
+            text = text.replace(/^## (.*$)/gim, '<h2 class="text-lg font-bold text-zinc-100 mt-4 mb-2">$1</h2>');
+            text = text.replace(/^# (.*$)/gim, '<h1 class="text-xl font-bold text-zinc-100 mt-4 mb-3">$1</h1>');
+            
+            // Convert bold
+            text = text.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-zinc-100">$1</strong>');
+            
+            // Convert italic
+            text = text.replace(/\*(.*?)\*/g, '<em class="italic">$1</em>');
+            
+            // Convert bullet lists
+            text = text.replace(/^\- (.*$)/gim, '<li class="ml-4">• $1</li>');
+            text = text.replace(/^• (.*$)/gim, '<li class="ml-4">• $1</li>');
+            
+            // Convert numbered lists
+            text = text.replace(/^\d+\.\s(.*$)/gim, '<li class="ml-4">$1</li>');
+            
+            // Convert line breaks
+            text = text.replace(/\n\n/g, '</p><p class="text-zinc-200 mt-2">');
+            text = text.replace(/\n/g, '<br>');
+            
+            // Wrap in paragraph if not already wrapped
+            if (!text.startsWith('<')) {
+                text = '<p class="text-zinc-200">' + text + '</p>';
+            }
+            
+            return text;
+        }
+
+        // Load Financial Summary
+        async function loadFinancialSummary() {
+            try {
+                const response = await fetch('/api/financial_summary/');
+                const data = await response.json();
+
+                document.getElementById('total-revenue').textContent = formatCurrency(data.total_revenue || 0);
+                document.getElementById('total-collected').textContent = formatCurrency(data.total_collected || 0);
+                document.getElementById('outstanding-balance').textContent = formatCurrency(data.outstanding || 0);
+
+                // Monthly Revenue Trend Chart
+                if (data.monthly && data.monthly.length > 0) {
+                    const ctx = document.getElementById('revenue-trend-chart').getContext('2d');
+                    if (charts.revenueTrend) charts.revenueTrend.destroy();
+                    
+                    charts.revenueTrend = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: data.monthly.map(m => m.month),
+                            datasets: [{
+                                label: 'Revenue',
+                                data: data.monthly.map(m => m.revenue),
+                                borderColor: '#3b82f6',
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                tension: 0.4,
+                                fill: true
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        label: (context) => formatCurrency(context.parsed.y)
+                                    }
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: { color: '#a1a1aa' },
+                                    grid: { color: '#27272a' }
+                                },
+                                x: {
+                                    ticks: { color: '#a1a1aa' },
+                                    grid: { color: '#27272a' }
+                                }
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading financial summary:', error);
+            }
+        }
+
+        // Load Patient Stats
+        async function loadPatientStats() {
+            try {
+                const response = await fetch('/api/patient_stats/');
+                const data = await response.json();
+
+                document.getElementById('total-patients').textContent = data.total_patients || 0;
+
+                // Top Paying Patients Chart
+                if (data.top_patients && data.top_patients.length > 0) {
+                    const ctx = document.getElementById('top-patients-chart').getContext('2d');
+                    if (charts.topPatients) charts.topPatients.destroy();
+                    
+                    charts.topPatients = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: data.top_patients.map(p => p.name || p.uid),
+                            datasets: [{
+                                label: 'Total Paid',
+                                data: data.top_patients.map(p => p.total_paid),
+                                backgroundColor: '#8b5cf6',
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            indexAxis: 'y',
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        label: (context) => formatCurrency(context.parsed.x)
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: {
+                                    beginAtZero: true,
+                                    ticks: { color: '#a1a1aa' },
+                                    grid: { color: '#27272a' }
+                                },
+                                y: {
+                                    ticks: { color: '#a1a1aa' },
+                                    grid: { display: false }
+                                }
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading patient stats:', error);
+            }
+        }
+
+        // Load Payment Modes
+        async function loadPaymentModes() {
+            try {
+                const response = await fetch('/api/payment_modes/');
+                const data = await response.json();
+
+                if (data.modes && data.modes.length > 0) {
+                    const ctx = document.getElementById('payment-modes-chart').getContext('2d');
+                    if (charts.paymentModes) charts.paymentModes.destroy();
+                    
+                    charts.paymentModes = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: data.modes,
+                            datasets: [{
+                                data: data.amounts,
+                                backgroundColor: [
+                                    '#3b82f6',
+                                    '#8b5cf6',
+                                    '#10b981',
+                                    '#f59e0b',
+                                    '#ef4444'
+                                ]
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'bottom',
+                                    labels: { color: '#a1a1aa' }
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: (context) => {
+                                            const label = context.label || '';
+                                            const value = formatCurrency(context.parsed);
+                                            return `${label}: ${value}`;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading payment modes:', error);
+            }
+        }
+
+        // Load Activity Trends
+        async function loadActivityTrends() {
+            try {
+                const response = await fetch('/api/activity_trends/');
+                const data = await response.json();
+
+                // Invoice Volume Chart
+                if (data.invoice_volume && data.invoice_volume.length > 0) {
+                    const ctx = document.getElementById('invoice-volume-chart').getContext('2d');
+                    if (charts.invoiceVolume) charts.invoiceVolume.destroy();
+                    
+                    charts.invoiceVolume = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: data.invoice_volume.map(v => v.month),
+                            datasets: [{
+                                label: 'Invoices',
+                                data: data.invoice_volume.map(v => v.count),
+                                borderColor: '#10b981',
+                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                tension: 0.4,
+                                fill: true
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: { 
+                                        color: '#a1a1aa',
+                                        precision: 0
+                                    },
+                                    grid: { color: '#27272a' }
+                                },
+                                x: {
+                                    ticks: { color: '#a1a1aa' },
+                                    grid: { color: '#27272a' }
+                                }
+                            }
+                        }
+                    });
+                }
+
+                // Activity Logs Table
+                if (data.recent_logs && data.recent_logs.length > 0) {
+                    const tbody = document.getElementById('activity-logs-body');
+                    tbody.innerHTML = '';
+                    
+                    data.recent_logs.forEach(log => {
+                        const row = document.createElement('tr');
+                        row.className = 'border-b border-zinc-700 hover:bg-zinc-700/50';
+                        row.innerHTML = `
+                            <td class="px-4 py-3">${formatDate(log.log_date_time)}</td>
+                            <td class="px-4 py-3 font-medium">${log.log_name}</td>
+                            <td class="px-4 py-3">${log.log_desc}</td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading activity trends:', error);
+            }
+        }
+
+        // Load AI Insights
+        async function loadAIInsights() {
+            const loadingEl = document.getElementById('insights-loading');
+            const contentEl = document.getElementById('insights-content');
+            const textEl = document.getElementById('insights-text');
+            const highlightsEl = document.getElementById('insights-highlights');
+            const highlightsList = document.getElementById('highlights-list');
+            const confidenceEl = document.getElementById('insights-confidence');
+            const confidenceBar = document.getElementById('confidence-bar');
+            const confidenceText = document.getElementById('confidence-text');
+            const copyBtn = document.getElementById('copy-insights-btn');
+            const rawEl = document.getElementById('insights-raw');
+            const rawResponse = document.getElementById('raw-response');
+
+            loadingEl.classList.remove('hidden');
+            contentEl.classList.add('opacity-50');
+
+            try {
+                const response = await fetch('/api/ai_insights/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                
+                const data = await response.json();
+
+                // Update insights text with proper markdown rendering
+                if (data.insights_text) {
+                    textEl.innerHTML = markdownToHTML(data.insights_text);
+                    copyBtn.classList.remove('hidden');
+                }
+
+                // Update highlights
+                if (data.highlights && data.highlights.length > 0) {
+                    highlightsList.innerHTML = '';
+                    data.highlights.forEach(highlight => {
+                        const li = document.createElement('li');
+                        li.className = 'flex items-start space-x-2';
+                        li.innerHTML = `
+                            <svg class="w-5 h-5 text-blue-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                            <span class="text-zinc-300">${highlight}</span>
+                        `;
+                        highlightsList.appendChild(li);
+                    });
+                    highlightsEl.classList.remove('hidden');
+                }
+
+                // Update confidence
+                if (data.confidence_score !== undefined) {
+                    const confidence = Math.round(data.confidence_score * 100);
+                    confidenceBar.style.width = confidence + '%';
+                    confidenceText.textContent = confidence + '%';
+                    //confidenceEl.classList.remove('hidden');
+                }
+
+                // Update raw response (admin only)
+                if (data.raw_model_response) {
+                    rawResponse.textContent = JSON.stringify(data.raw_model_response, null, 2);
+                    rawEl.classList.remove('hidden');
+                }
+
+            } catch (error) {
+                console.error('Error loading AI insights:', error);
+                textEl.innerHTML = `<p class="text-red-400">Failed to load AI insights. Please try again later.</p>`;
+            } finally {
+                loadingEl.classList.add('hidden');
+                contentEl.classList.remove('opacity-50');
+            }
+        }
+
+        // Copy Insights to Clipboard
+        document.getElementById('copy-insights-btn').addEventListener('click', () => {
+            const text = document.getElementById('insights-text').innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Insights copied to clipboard!');
+            });
+        });
+
+        // Regenerate Insights
+        document.getElementById('regenerate-insights-btn').addEventListener('click', loadAIInsights);
+
+        // Export Modal
+        const exportBtn = document.getElementById('export-report-btn');
+        const exportModal = document.getElementById('export-modal');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        const generatePdfBtn = document.getElementById('generate-pdf-btn');
+        const exportLoading = document.getElementById('export-loading');
+
+        exportBtn.addEventListener('click', () => {
+            exportModal.classList.remove('hidden');
+        });
+
+        closeModalBtn.addEventListener('click', () => {
+            exportModal.classList.add('hidden');
+        });
+
+        // Generate PDF (Server-side only)
+        generatePdfBtn.addEventListener('click', async () => {
+            const checkboxes = document.querySelectorAll('.section-checkbox:checked');
+            const sections = Array.from(checkboxes).map(cb => cb.value);
+            const orientation = document.querySelector('input[name="orientation"]:checked').value;
+
+            if (sections.length === 0) {
+                alert('Please select at least one section to export.');
+                return;
+            }
+
+            exportLoading.classList.remove('hidden');
+            generatePdfBtn.disabled = true;
+
+            try {
+                const response = await fetch('/api/generate_report/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sections: sections,
+                        orientation: orientation,
+                        include_charts: true
+                    })
+                });
+
+                if (response.ok) {
+                    const contentType = response.headers.get('content-type');
+                    
+                    if (contentType && contentType.includes('application/pdf')) {
+                        const blob = await response.blob();
+                        
+                        if (blob.size === 0) {
+                            throw new Error('Received empty PDF file');
+                        }
+                        
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `HealthLedger_Report_${new Date().toISOString().slice(0,10)}.pdf`;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        window.URL.revokeObjectURL(url);
+                        
+                        exportModal.classList.add('hidden');
+                    } else {
+                        const errorData = await response.json();
+                        console.error('Server response:', errorData);
+                        throw new Error(errorData.message || 'PDF generation failed');
+                    }
+                } else {
+                    const errorData = await response.json();
+                    console.error('Server error:', errorData);
+                    throw new Error(errorData.error || errorData.message || 'PDF generation failed');
+                }
+            } catch (error) {
+                console.error('Error generating PDF:', error);
+                alert(`Failed to generate PDF: ${error.message}`);
+            } finally {
+                exportLoading.classList.add('hidden');
+                generatePdfBtn.disabled = false;
+            }
+        });
+
+        // Client-side PDF generation - Use browser print
+        async function generateClientSidePDF(sections, orientation) {
+            // Remove print-section class from all sections first
+            document.querySelectorAll('[id$="-section"]').forEach(section => {
+                section.classList.remove('print-section');
+            });
+            
+            // Add print-section class only to selected sections
+            sections.forEach(sectionId => {
+                const element = document.getElementById(sectionId);
+                if (element) {
+                    element.classList.add('print-section');
+                }
+            });
+            
+            // Set page orientation
+            const style = document.createElement('style');
+            style.id = 'print-orientation-style';
+            style.textContent = `
+                @media print {
+                    @page {
+                        size: ${orientation === 'landscape' ? 'landscape' : 'portrait'};
+                        margin: 1cm;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            // Small delay to ensure styles are applied
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Trigger browser print dialog
+            window.print();
+            
+            // Cleanup after print
+            setTimeout(() => {
+                // Remove the orientation style
+                const styleEl = document.getElementById('print-orientation-style');
+                if (styleEl) {
+                    styleEl.remove();
+                }
+                
+                // Remove print-section classes
+                document.querySelectorAll('.print-section').forEach(section => {
+                    section.classList.remove('print-section');
+                });
+            }, 1000);
+        }
+
+        // Helper: Export chart as base64 image
+        function exportChartImage(chartId) {
+            const chart = charts[chartId];
+            return chart ? chart.toBase64Image() : null;
+        }
+
+        // Load All Patients List
+        let allPatients = [];
+        let currentFilter = 'all';
+
+        async function loadPatientsList() {
+            const loadingEl = document.getElementById('patients-loading');
+            const tbody = document.getElementById('patients-list-body');
+            
+            try {
+                loadingEl.style.display = 'block';
+                tbody.innerHTML = '';
+
+                const response = await fetch('/api/patients_list/');
+                const data = await response.json();
+                
+                allPatients = data;
+                displayPatients(currentFilter);
+                
+                loadingEl.style.display = 'none';
+            } catch (error) {
+                console.error('Error loading patients list:', error);
+                loadingEl.innerHTML = '<span class="text-red-400">Failed to load patients data</span>';
+            }
+        }
+
+        function displayPatients(filter) {
+            const tbody = document.getElementById('patients-list-body');
+            tbody.innerHTML = '';
+            
+            const filtered = allPatients.filter(patient => {
+                if (filter === 'paid') return patient.remark === 'Paid';
+                if (filter === 'pending') return patient.remark === 'Pending';
+                return true; // all
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-zinc-500">No patients found</td></tr>';
+                return;
+            }
+
+            filtered.forEach(patient => {
+                const row = document.createElement('tr');
+                row.className = 'border-b border-zinc-700 hover:bg-zinc-700/50';
+                
+                const statusClass = patient.remark === 'Paid' ? 'text-green-400' : 'text-orange-400';
+                
+                row.innerHTML = `
+                    <td class="px-4 py-3">${patient.uid}</td>
+                    <td class="px-4 py-3">${patient.username}</td>
+                    <td class="px-4 py-3">${patient.invoiceNum}</td>
+                    <td class="px-4 py-3">${formatDate(patient.date)}</td>
+                    <td class="px-4 py-3">${formatCurrency(patient.amount)}</td>
+                    <td class="px-4 py-3">${formatCurrency(patient.paidAmount)}</td>
+                    <td class="px-4 py-3">${formatCurrency(patient.remainingAmount)}</td>
+                    <td class="px-4 py-3"><span class="${statusClass} font-semibold">${patient.remark}</span></td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // Filter buttons
+        document.getElementById('filter-all').addEventListener('click', () => {
+            currentFilter = 'all';
+            displayPatients('all');
+            setActiveFilter('filter-all');
+        });
+
+        document.getElementById('filter-paid').addEventListener('click', () => {
+            currentFilter = 'paid';
+            displayPatients('paid');
+            setActiveFilter('filter-paid');
+        });
+
+        document.getElementById('filter-pending').addEventListener('click', () => {
+            currentFilter = 'pending';
+            displayPatients('pending');
+            setActiveFilter('filter-pending');
+        });
+
+        function setActiveFilter(activeId) {
+            ['filter-all', 'filter-paid', 'filter-pending'].forEach(id => {
+                const btn = document.getElementById(id);
+                if (id === activeId) {
+                    btn.classList.remove('bg-zinc-700');
+                    btn.classList.add('bg-blue-600');
+                } else {
+                    btn.classList.remove('bg-blue-600');
+                    btn.classList.add('bg-zinc-700');
+                }
+            });
+        }
+
+        // Initialize dashboard
+        async function initDashboard() {
+            await Promise.all([
+                loadFinancialSummary(),
+                loadPatientStats(),
+                loadPaymentModes(),
+                loadActivityTrends(),
+                loadPatientsList()
+            ]);
+        }
+
+        // Run on page load
+        window.addEventListener('DOMContentLoaded', initDashboard);
+    </script>
+
+</body>
+</html>
