@@ -238,8 +238,8 @@ def user_login(request):
                 request.session[f'{auth_token}_is_authenticated'] = True
                 
                 email = request.COOKIES.get('auth_token_name').replace('"','')
-                base64_encoded_email = base64.b64encode(email.encode()).decode()
-                return redirect('/user/'+base64_encoded_email+'/')
+                # Use plain text email in URL instead of base64
+                return redirect('/user/'+email+'/')
             else:
                 return render(request, 'src/management/LOGIN.html', {'error': 'Invalid user authentication key'})
         
@@ -254,8 +254,8 @@ def user_login(request):
                 request.session[f'{auth_token}_user_name'] = user.get('NAME')
                 request.session[f'{auth_token}_is_authenticated'] = True
                 request.session[f'{auth_token}'] = auth_token
-                base64_encoded_email = base64.b64encode(email.encode()).decode()
-                response = redirect('/user/'+base64_encoded_email+'/')
+                # Use plain text email in URL instead of base64
+                response = redirect('/user/'+email+'/')
                 response.set_cookie(
                     'auth_token',
                     auth_token,
@@ -289,16 +289,16 @@ def user_login(request):
 def user_dashboard(request, user_email):
     auth_token = request.COOKIES.get('auth_token')
     if auth_token and request.session.get(f'{auth_token}_is_authenticated'):
-        user_email_d = base64.b64decode(user_email).decode()
-        return render(request, 'src/user/DASH.html', {'user_email_d': user_email_d, 'user_email': user_email})
+        # user_email is already in plain text format, no need to decode
+        return render(request, 'src/user/DASH.html', {'user_email_d': user_email, 'user_email': user_email})
     else:
         return redirect('/login/')
     
 def user_invoices(request, user_email):
     auth_token = request.COOKIES.get('auth_token')
     if auth_token and request.session.get(f'{auth_token}_is_authenticated'):
-        email = base64.b64decode(user_email).decode()
-        return render(request, 'src/user/INVOICES.html', {'user_email_d': email, 'user_email': user_email})
+        # user_email is already in plain text format, no need to decode
+        return render(request, 'src/user/INVOICES.html', {'user_email_d': user_email, 'user_email': user_email})
     else:
         return redirect('/login/')
 # ===================================================== USER VIEWS
@@ -1337,10 +1337,10 @@ def api_financial_summary(request):
     Endpoint: /api/financial_summary/
     """
     try:
-        # Total revenue from all invoices
+        # Total revenue from all invoices (from PATIENT_DATA table)
         total_revenue_query = """
             SELECT COALESCE(SUM(AMOUNT), 0) AS TOTAL_REVENUE
-            FROM INVOICE_LOGS
+            FROM PATIENT_DATA
         """
         
         # Total collected payments
@@ -1349,15 +1349,15 @@ def api_financial_summary(request):
             FROM INVOICE_LOGS
         """
         
-        # Outstanding balance - get latest entry per invoice
+        # Outstanding balance - calculate from patient data minus total paid
         outstanding_query = """
-            SELECT COALESCE(SUM(REMAINING_AMOUNT_ON_DATE), 0) AS OUTSTANDING
-            FROM INVOICE_LOGS il
-            WHERE (INVOICE_NUMBER, LOG_DATE) IN (
-                SELECT INVOICE_NUMBER, MAX(LOG_DATE)
+            SELECT COALESCE(SUM(p.AMOUNT) - SUM(COALESCE(il.TOTAL_PAID, 0)), 0) AS OUTSTANDING
+            FROM PATIENT_DATA p
+            LEFT JOIN (
+                SELECT INVOICE_NUMBER, SUM(PAID_AMOUNT_ON_DATE) AS TOTAL_PAID
                 FROM INVOICE_LOGS
                 GROUP BY INVOICE_NUMBER
-            )
+            ) il ON p.INNVOCE_NUM = il.INVOICE_NUMBER
         """
         
         # Monthly revenue trend (last 12 months)
@@ -1618,9 +1618,7 @@ def api_ai_insights(request):
     Security: API key is read from .env, never exposed to client.
     Endpoint: /api/ai_insights/
     """
-    if request.method != 'POST':
-        return JsonResponse({"error": "Method not allowed"}, status=405)
-    
+   
     try:
         # Read Groq configuration from environment
         groq_api_key = os.getenv('GROQ_API_KEY')
@@ -1640,38 +1638,35 @@ def api_ai_insights(request):
             body = {}
         
         # Collect analytics data for the prompt
-        # 1. Financial summary
-        financial_query = """
-            WITH invoice_totals AS (
-                SELECT 
-                    COALESCE(SUM(AMOUNT), 0) AS TOTAL_REVENUE,
-                    COUNT(DISTINCT INVOICE_NUMBER) AS TOTAL_INVOICES
+        # 1. Financial summary - Execute queries separately for accuracy
+        total_revenue_query = """
+            SELECT COALESCE(SUM(AMOUNT), 0) AS TOTAL_REVENUE
+            FROM PATIENT_DATA
+        """
+        
+        total_collected_query = """
+            SELECT COALESCE(SUM(PAID_AMOUNT_ON_DATE), 0) AS TOTAL_COLLECTED
+            FROM INVOICE_LOGS
+        """
+        
+        outstanding_query = """
+            SELECT COALESCE(SUM(p.AMOUNT) - SUM(COALESCE(il.TOTAL_PAID, 0)), 0) AS TOTAL_OUTSTANDING
+            FROM PATIENT_DATA p
+            LEFT JOIN (
+                SELECT INVOICE_NUMBER, SUM(PAID_AMOUNT_ON_DATE) AS TOTAL_PAID
                 FROM INVOICE_LOGS
-            ),
-            payment_totals AS (
-                SELECT 
-                    COALESCE(SUM(PAID_AMOUNT_ON_DATE), 0) AS TOTAL_COLLECTED,
-                    COALESCE(AVG(PAID_AMOUNT_ON_DATE), 0) AS AVG_PAYMENT
-                FROM INVOICE_LOGS
-            ),
-            outstanding AS (
-                SELECT COALESCE(SUM(REMAINING_AMOUNT_ON_DATE), 0) AS TOTAL_OUTSTANDING
-                FROM (
-                    SELECT INVOICE_NUMBER, MAX(LOG_DATE) AS LATEST_DATE
-                    FROM INVOICE_LOGS
-                    GROUP BY INVOICE_NUMBER
-                ) latest
-                JOIN INVOICE_LOGS il 
-                ON latest.INVOICE_NUMBER = il.INVOICE_NUMBER 
-                AND latest.LATEST_DATE = il.LOG_DATE
-            )
-            SELECT 
-                i.TOTAL_REVENUE,
-                i.TOTAL_INVOICES,
-                p.TOTAL_COLLECTED,
-                p.AVG_PAYMENT,
-                o.TOTAL_OUTSTANDING
-            FROM invoice_totals i, payment_totals p, outstanding o
+                GROUP BY INVOICE_NUMBER
+            ) il ON p.INNVOCE_NUM = il.INVOICE_NUMBER
+        """
+        
+        invoice_count_query = """
+            SELECT COUNT(DISTINCT INNVOCE_NUM) AS TOTAL_INVOICES
+            FROM PATIENT_DATA
+        """
+        
+        avg_payment_query = """
+            SELECT COALESCE(AVG(PAID_AMOUNT_ON_DATE), 0) AS AVG_PAYMENT
+            FROM INVOICE_LOGS
         """
         
         # 2. Monthly revenue trend (last 6 months)
@@ -1723,14 +1718,18 @@ def api_ai_insights(request):
         
         # Execute all queries in parallel
         queries = [
-            financial_query,
+            total_revenue_query,
+            total_collected_query,
+            outstanding_query,
+            invoice_count_query,
+            avg_payment_query,
             monthly_query,
             payment_modes_query,
             top_patients_query,
             patient_stats_query
         ]
         
-        success, results = DB2Query.runParallelQueries(queries, max_workers=5)
+        success, results = DB2Query.runParallelQueries(queries, max_workers=9)
         
         if not success:
             return JsonResponse({
@@ -1740,22 +1739,27 @@ def api_ai_insights(request):
             })
         
         # Parse collected data
-        financial_data = results[0][0] if results[0] else {}
-        monthly_data = results[1] if len(results) > 1 else []
-        payment_modes = results[2] if len(results) > 2 else []
-        top_patients = results[3] if len(results) > 3 else []
-        patient_stats = results[4][0] if len(results) > 4 and results[4] else {}
+        total_revenue = results[0][0]['TOTAL_REVENUE'] if results[0] else 0
+        total_collected = results[1][0]['TOTAL_COLLECTED'] if len(results) > 1 and results[1] else 0
+        total_outstanding = results[2][0]['TOTAL_OUTSTANDING'] if len(results) > 2 and results[2] else 0
+        total_invoices = results[3][0]['TOTAL_INVOICES'] if len(results) > 3 and results[3] else 0
+        avg_payment = results[4][0]['AVG_PAYMENT'] if len(results) > 4 and results[4] else 0
+        
+        monthly_data = results[5] if len(results) > 5 else []
+        payment_modes = results[6] if len(results) > 6 else []
+        top_patients = results[7] if len(results) > 7 else []
+        patient_stats = results[8][0] if len(results) > 8 and results[8] else {}
         
         # Build structured context for Groq
         context = {
             "timeframe": "Last 6 months",
             "currency": "INR",
             "financial_summary": {
-                "total_revenue": float(financial_data.get('TOTAL_REVENUE', 0)),
-                "total_collected": float(financial_data.get('TOTAL_COLLECTED', 0)),
-                "total_outstanding": float(financial_data.get('TOTAL_OUTSTANDING', 0)),
-                "total_invoices": int(financial_data.get('TOTAL_INVOICES', 0)),
-                "avg_payment": float(financial_data.get('AVG_PAYMENT', 0))
+                "total_revenue": float(total_revenue),
+                "total_collected": float(total_collected),
+                "total_outstanding": float(total_outstanding),
+                "total_invoices": int(total_invoices),
+                "avg_payment": float(avg_payment)
             },
             "monthly_trends": [
                 {
@@ -1875,7 +1879,7 @@ Format your response as plain text with clear sections."""
                 confidence_score += 0.1
             if len(payment_modes) >= 3:
                 confidence_score += 0.1
-            if float(financial_data.get('TOTAL_REVENUE', 0)) > 0:
+            if float(total_revenue) > 0:
                 confidence_score += 0.1
             
             confidence_score = min(confidence_score, 1.0)
@@ -1959,27 +1963,47 @@ def api_generate_report(request):
         
         # Map section IDs to data fetching functions
         if 'kpi-section' in sections:
-            financial_query = """
-                SELECT 
-                    COALESCE(SUM(AMOUNT), 0) AS TOTAL_REVENUE,
-                    COALESCE(SUM(PAID_AMOUNT_ON_DATE), 0) AS TOTAL_COLLECTED,
-                    COALESCE(SUM(REMAINING_AMOUNT_ON_DATE), 0) AS OUTSTANDING
+            # Total Revenue from patient invoices
+            total_revenue_query = """
+                SELECT COALESCE(SUM(AMOUNT), 0) AS TOTAL_REVENUE
+                FROM PATIENT_DATA
+            """
+            
+            # Total Collected from payment logs
+            total_collected_query = """
+                SELECT COALESCE(SUM(PAID_AMOUNT_ON_DATE), 0) AS TOTAL_COLLECTED
                 FROM INVOICE_LOGS
             """
+            
+            # Outstanding = Total invoiced - Total paid (grouped by invoice to avoid double counting)
+            outstanding_query = """
+                SELECT COALESCE(SUM(p.AMOUNT) - SUM(COALESCE(il.TOTAL_PAID, 0)), 0) AS OUTSTANDING
+                FROM PATIENT_DATA p
+                LEFT JOIN (
+                    SELECT INVOICE_NUMBER, SUM(PAID_AMOUNT_ON_DATE) AS TOTAL_PAID
+                    FROM INVOICE_LOGS
+                    GROUP BY INVOICE_NUMBER
+                ) il ON p.INNVOCE_NUM = il.INVOICE_NUMBER
+            """
+            
+            # Total Patients count
             patient_count_query = """
                 SELECT COUNT(DISTINCT UID) AS TOTAL_PATIENTS
                 FROM PATIENT_DATA
             """
             
-            success1, fin_result = DB2Query.runSelectQuery(financial_query)
-            success2, pat_result = DB2Query.runSelectQuery(patient_count_query)
+            # Execute all queries
+            success1, revenue_result = DB2Query.runSelectQuery(total_revenue_query)
+            success2, collected_result = DB2Query.runSelectQuery(total_collected_query)
+            success3, outstanding_result = DB2Query.runSelectQuery(outstanding_query)
+            success4, patient_result = DB2Query.runSelectQuery(patient_count_query)
             
-            if success1 and fin_result and success2 and pat_result:
+            if success1 and revenue_result and success2 and collected_result and success3 and outstanding_result and success4 and patient_result:
                 report_data['sections']['kpi'] = {
-                    'total_revenue': float(fin_result[0].get('TOTAL_REVENUE', 0)),
-                    'total_collected': float(fin_result[0].get('TOTAL_COLLECTED', 0)),
-                    'outstanding': float(fin_result[0].get('OUTSTANDING', 0)),
-                    'total_patients': int(pat_result[0].get('TOTAL_PATIENTS', 0))
+                    'total_revenue': float(revenue_result[0].get('TOTAL_REVENUE', 0)),
+                    'total_collected': float(collected_result[0].get('TOTAL_COLLECTED', 0)),
+                    'outstanding': float(outstanding_result[0].get('OUTSTANDING', 0)),
+                    'total_patients': int(patient_result[0].get('TOTAL_PATIENTS', 0))
                 }
         
         if 'revenue-trend-section' in sections:
@@ -2066,7 +2090,6 @@ def api_generate_report(request):
             """
             success, result = DB2Query.runSelectQuery(query)
             if success and result:
-                print(f"DEBUG: Fetched {len(result)} activity logs for PDF")  # Debug log
                 report_data['sections']['activity_logs'] = [
                     {
                         'log_date_time': str(row['LOG_DATE_TIME']),
@@ -2097,7 +2120,6 @@ def api_generate_report(request):
             """
             success, result = DB2Query.runSelectQuery(query)
             if success and result:
-                print(f"DEBUG: Fetched {len(result)} patients for PDF")  # Debug log
                 report_data['sections']['patients_list'] = [
                     {
                         'uid': row['UID'],
@@ -2111,7 +2133,6 @@ def api_generate_report(request):
                     }
                     for row in result
                 ]
-                print(f"DEBUG: Processed {len(report_data['sections']['patients_list'])} patients")  # Debug log
             else:
                 print(f"DEBUG: Failed to fetch patients - success={success}, result={result}")  # Debug log
         
@@ -2160,6 +2181,7 @@ def generate_reportlab_pdf(report_data, sections, orientation):
     Returns PDF as bytes.
     """
     from io import BytesIO
+    import requests
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -2170,14 +2192,14 @@ def generate_reportlab_pdf(report_data, sections, orientation):
     from reportlab.graphics.charts.piecharts import Pie
     from reportlab.graphics.charts.barcharts import VerticalBarChart
     from reportlab.graphics.charts.legends import Legend
-    
+
     buffer = BytesIO()
-    
+
     # Set page size based on orientation
     pagesize = landscape(A4) if orientation == 'landscape' else A4
     page_width = pagesize[0]
     page_height = pagesize[1]
-    
+
     # Create PDF document with minimal margins
     doc = SimpleDocTemplate(
         buffer,
@@ -2187,13 +2209,13 @@ def generate_reportlab_pdf(report_data, sections, orientation):
         topMargin=0.5*inch,
         bottomMargin=0.5*inch
     )
-    
+
     # Calculate usable width
     usable_width = page_width - 1*inch  # Total width minus margins
-    
+
     # Container for PDF elements
     story = []
-    
+
     # Define styles with Times New Roman
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
@@ -2227,9 +2249,17 @@ def generate_reportlab_pdf(report_data, sections, orientation):
         'NormalText',
         parent=styles['Normal'],
         fontName='Times-Roman',
-        fontSize=10
+        fontSize=10,
+        leading=12
     )
-    
+    small_style = ParagraphStyle(
+        'SmallText',
+        parent=styles['Normal'],
+        fontName='Times-Roman',
+        fontSize=8,
+        leading=10
+    )
+
     # Modern Title Header with colored background - compact
     header_data = [[Paragraph("HealthLedger Analytics Report", title_style)],
                     [Paragraph(f"Generated: {report_data['generated_at']}", subtitle_style)]]
@@ -2241,23 +2271,23 @@ def generate_reportlab_pdf(report_data, sections, orientation):
         ('TOPPADDING', (0, 0), (-1, 0), 12),
         ('BOTTOMPADDING', (0, -1), (-1, -1), 12),
     ]))
-    
+
     story.append(header_table)
     story.append(Spacer(1, 0.15*inch))
-    
+
     # KPI Section - Compact modern cards
     if 'kpi-section' in sections and 'kpi' in report_data['sections']:
         kpi = report_data['sections']['kpi']
         story.append(Paragraph("Key Performance Indicators", heading_style))
-        
+
         # Create compact KPI cards using full width
         col_width = usable_width / 4
         kpi_cards = [
             ['Total Revenue', 'Collected Payments', 'Outstanding Balance', 'Total Patients'],
-            [f"Rs. {kpi['total_revenue']:,.0f}", f"Rs. {kpi['total_collected']:,.0f}", 
+            [f"Rs. {kpi['total_revenue']:,.0f}", f"Rs. {kpi['total_collected']:,.0f}",
              f"Rs. {kpi['outstanding']:,.0f}", str(kpi['total_patients'])]
         ]
-        
+
         kpi_table = Table(kpi_cards, colWidths=[col_width]*4)
         kpi_table.setStyle(TableStyle([
             # Header row
@@ -2271,7 +2301,7 @@ def generate_reportlab_pdf(report_data, sections, orientation):
             ('ALIGN', (0, 0), (3, 0), 'CENTER'),
             ('TOPPADDING', (0, 0), (3, 0), 6),
             ('BOTTOMPADDING', (0, 0), (3, 0), 6),
-            
+
             # Values row
             ('BACKGROUND', (0, 1), (0, 1), colors.HexColor('#dbeafe')),
             ('BACKGROUND', (1, 1), (1, 1), colors.HexColor('#d1fae5')),
@@ -2283,22 +2313,20 @@ def generate_reportlab_pdf(report_data, sections, orientation):
             ('ALIGN', (0, 1), (3, 1), 'CENTER'),
             ('TOPPADDING', (0, 1), (3, 1), 8),
             ('BOTTOMPADDING', (0, 1), (3, 1), 8),
-            
+
             # Grid
             ('GRID', (0, 0), (-1, -1), 1.5, colors.white),
         ]))
-        
+
         story.append(kpi_table)
         story.append(Spacer(1, 0.15*inch))
-    
+
     # Revenue Trend Section - With Bar Chart side-by-side with table
     if 'revenue-trend-section' in sections and 'revenue_trend' in report_data['sections']:
         story.append(Paragraph("Monthly Revenue Trend", heading_style))
-        
+
         trend_items = report_data['sections']['revenue_trend']
         if trend_items:
-            # Create a combined layout: Chart on left, Table on right
-            # Chart
             drawing = Drawing(usable_width * 0.45, 150)
             bc = VerticalBarChart()
             bc.x = 30
@@ -2315,15 +2343,14 @@ def generate_reportlab_pdf(report_data, sections, orientation):
             bc.valueAxis.labels.fontSize = 7
             bc.bars[0].fillColor = colors.HexColor('#3b82f6')
             bc.barWidth = 12
-            
+
             drawing.add(bc)
             story.append(drawing)
-        
-            # Compact table below chart - full width
+
             trend_data = [['Month', 'Revenue']]
             for item in trend_items:
                 trend_data.append([item['month'], f"Rs. {item['revenue']:,.0f}"])
-            
+
             col_width = usable_width / 2
             trend_table = Table(trend_data, colWidths=[col_width, col_width])
             trend_table.setStyle(TableStyle([
@@ -2338,17 +2365,16 @@ def generate_reportlab_pdf(report_data, sections, orientation):
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
             ]))
-            
+
             story.append(trend_table)
         story.append(Spacer(1, 0.15*inch))
-    
+
     # Payment Modes Section - Compact with Pie Chart
     if 'payment-modes-section' in sections and 'payment_modes' in report_data['sections']:
         story.append(Paragraph("Payment Mode Distribution", heading_style))
-        
+
         payment_items = report_data['sections']['payment_modes']
-        
-        # Create compact pie chart
+
         if payment_items:
             drawing = Drawing(usable_width * 0.4, 140)
             pc = Pie()
@@ -2361,23 +2387,21 @@ def generate_reportlab_pdf(report_data, sections, orientation):
             pc.slices.strokeWidth = 0.5
             pc.slices.fontName = 'Times-Roman'
             pc.slices.fontSize = 8
-            
-            # Color palette
+
             chart_colors = [
-                colors.HexColor('#3b82f6'),  # Blue
-                colors.HexColor('#10b981'),  # Green
-                colors.HexColor('#f59e0b'),  # Amber
-                colors.HexColor('#8b5cf6'),  # Purple
-                colors.HexColor('#ec4899'),  # Pink
-                colors.HexColor('#14b8a6'),  # Teal
+                colors.HexColor('#3b82f6'),
+                colors.HexColor('#10b981'),
+                colors.HexColor('#f59e0b'),
+                colors.HexColor('#8b5cf6'),
+                colors.HexColor('#ec4899'),
+                colors.HexColor('#14b8a6'),
             ]
             for i, item in enumerate(payment_items):
                 pc.slices[i].fillColor = chart_colors[i % len(chart_colors)]
-            
+
             drawing.add(pc)
             story.append(drawing)
-        
-            # Compact table - full width
+
             payment_data = [['Mode', 'Count', 'Amount']]
             for item in payment_items:
                 payment_data.append([
@@ -2385,7 +2409,7 @@ def generate_reportlab_pdf(report_data, sections, orientation):
                     str(item['count']),
                     f"Rs. {item['amount']:,.0f}"
                 ])
-            
+
             col_width = usable_width / 3
             payment_table = Table(payment_data, colWidths=[col_width]*3)
             payment_table.setStyle(TableStyle([
@@ -2400,25 +2424,24 @@ def generate_reportlab_pdf(report_data, sections, orientation):
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
             ]))
-            
+
             story.append(payment_table)
         story.append(Spacer(1, 0.15*inch))
-    
+
     # Top Patients Section - Compact full-width table
     if 'top-patients-section' in sections and 'top_patients' in report_data['sections']:
         story.append(Paragraph("Top 10 Paying Patients", heading_style))
-        
+
         top_patients_items = report_data['sections']['top_patients']
-        
-        # Compact table - full width
+
         patients_data = [['UID', 'Name', 'Total Paid']]
         for item in top_patients_items:
             patients_data.append([
                 item['uid'],
-                item['name'][:25],  # Truncate long names
+                item['name'][:25],
                 f"Rs. {item['total_paid']:,.0f}"
             ])
-        
+
         col_width = usable_width / 3
         patients_table = Table(patients_data, colWidths=[col_width, col_width, col_width])
         patients_table.setStyle(TableStyle([
@@ -2433,21 +2456,20 @@ def generate_reportlab_pdf(report_data, sections, orientation):
             ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
         ]))
-        
+
         story.append(patients_table)
         story.append(Spacer(1, 0.15*inch))
-    
+
     # Invoice Volume Section - Compact
     if 'invoice-volume-section' in sections and 'invoice_volume' in report_data['sections']:
         story.append(Paragraph("Invoice Volume Trend", heading_style))
-        
+
         volume_items = report_data['sections']['invoice_volume']
-        
-        # Compact table - full width
+
         volume_data = [['Month', 'Invoice Count']]
         for item in volume_items:
             volume_data.append([item['month'], str(item['count'])])
-        
+
         col_width = usable_width / 2
         volume_table = Table(volume_data, colWidths=[col_width, col_width])
         volume_table.setStyle(TableStyle([
@@ -2462,27 +2484,25 @@ def generate_reportlab_pdf(report_data, sections, orientation):
             ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
         ]))
-        
+
         story.append(volume_table)
         story.append(Spacer(1, 0.15*inch))
-    
+
     # Activity Logs Section - Compact full width
     if 'activity-logs-section' in sections and 'activity_logs' in report_data['sections']:
         story.append(Paragraph("Recent System Activity", heading_style))
-        
+
         activity_data = [['Date/Time', 'Activity', 'Description']]
         for item in report_data['sections']['activity_logs']:
-            # Replace special characters with ASCII equivalents
             log_name = str(item['log_name']).replace('₹', 'Rs.').replace('✓', 'OK').replace('✗', 'X')
             log_desc = str(item['log_desc']).replace('₹', 'Rs.').replace('✓', 'OK').replace('✗', 'X')
-            
+
             activity_data.append([
                 item['log_date_time'][:16],
-                log_name[:30],  # Truncate
-                log_desc[:60]  # More space for description
+                log_name[:30],
+                log_desc[:60]
             ])
-        
-        # Full width table
+
         activity_table = Table(activity_data, colWidths=[usable_width*0.2, usable_width*0.25, usable_width*0.55])
         activity_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3b82f6')),
@@ -2496,36 +2516,35 @@ def generate_reportlab_pdf(report_data, sections, orientation):
             ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
         ]))
-        
+
         story.append(activity_table)
         story.append(Spacer(1, 0.15*inch))
-    
+
     # Patients List Section - Compact full width
     if 'patients-list-section' in sections and 'patients_list' in report_data['sections']:
         story.append(Paragraph("All Patients List", heading_style))
-        
+
         list_data = [['UID', 'Name', 'Invoice', 'Date', 'Amount', 'Paid', 'Status']]
-        patients_to_show = report_data['sections']['patients_list'][:50]  # Limit to 50
-        
+        patients_to_show = report_data['sections']['patients_list']
+
         for item in patients_to_show:
             list_data.append([
-                item['uid'][:12],  # Truncate UID
-                item['username'][:20],  # Truncate names
-                item['invoice_num'][:12],  # Truncate invoice
+                item['uid'][:12],
+                item['username'][:20],
+                item['invoice_num'][:12],
                 item['date'][:10],
                 f"Rs. {item['amount']:,.0f}",
                 f"Rs. {item['paid_amount']:,.0f}",
-                item['remark'][:8]  # Truncate status
+                item['remark'][:8]
             ])
-        
-        # Full width compact table
+
         if orientation == 'landscape':
-            col_widths = [usable_width*0.12, usable_width*0.2, usable_width*0.15, 
+            col_widths = [usable_width*0.12, usable_width*0.2, usable_width*0.15,
                          usable_width*0.13, usable_width*0.15, usable_width*0.15, usable_width*0.1]
         else:
-            col_widths = [usable_width*0.12, usable_width*0.2, usable_width*0.15, 
+            col_widths = [usable_width*0.12, usable_width*0.2, usable_width*0.15,
                          usable_width*0.13, usable_width*0.13, usable_width*0.13, usable_width*0.14]
-        
+
         list_table = Table(list_data, colWidths=col_widths)
         list_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3b82f6')),
@@ -2539,10 +2558,95 @@ def generate_reportlab_pdf(report_data, sections, orientation):
             ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
         ]))
-        
+
         story.append(list_table)
         story.append(Spacer(1, 0.1*inch))
-    
+
+    # AI Insights Section - fetch from local API and render
+    # if 'ai-insights-section' in sections:
+    if True:
+        story.append(Paragraph("AI Insights", heading_style))
+        ai_paragraphs_added = False
+        try:
+            api_url = "http://127.0.0.1:8000/api/ai_insights/"
+            resp = requests.get(api_url)
+            if resp.ok:
+                data = resp.json()
+                insights_text = data.get('insights_text', '')
+                highlights = data.get('highlights', [])
+                confidence = data.get('confidence_score', 0)
+                references = data.get('references', {})
+                
+                insights_text = insights_text.replace('₹', 'Rs.').replace('✓', 'OK').replace('✗', 'X').replace('**', '')
+                # Ensure highlights is a list of cleaned strings (the API returns a list)
+                if isinstance(highlights, list):
+                    highlights = [
+                        str(h).replace('₹', 'Rs.').replace('✓', 'OK').replace('✗', 'X').replace('**', '')
+                        for h in highlights
+                    ]
+                else:
+                    highlights = [str(highlights).replace('₹', 'Rs.').replace('✓', 'OK').replace('✗', 'X').replace('**', '')]
+
+                print(f"DEBUG: AI Insights fetched - {insights_text}")  # Debug log
+                # Render insights text (split by double newlines for paragraphs)
+                if insights_text:
+                    for part in insights_text.split('\n\n'):
+                        # Keep line breaks inside paragraph
+                        part_safe = part.replace('\n', '<br/>')
+                        story.append(Paragraph(part_safe, normal_style))
+                        story.append(Spacer(1, 0.08*inch))
+                    ai_paragraphs_added = True
+
+                # Render highlights as a compact table / list
+                if highlights:
+                    # Render highlights as a simple paragraph list (bulleted, compact)
+                    safe_lines = []
+                    for h in highlights:
+                        # basic HTML-escape and truncate to keep layout tidy
+                        s = str(h).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('\n', ' ')
+                        if len(s) > 280:
+                            s = s[:277] + '...'
+                        safe_lines.append('• ' + s)
+                    highlights_text = '<br/>'.join(safe_lines)
+                    story.append(Paragraph(highlights_text, normal_style))
+                    story.append(Spacer(1, 0.08*inch))
+                    ai_paragraphs_added = True
+
+                # Render confidence and references in a small table
+                ref_data = [
+                    ['Confidence', 'Total Invoices', 'Months Analyzed', 'Payment Modes']
+                ]
+                ref_data.append([
+                    f"{confidence:.2f}",
+                    str(references.get('total_invoices', '-')),
+                    str(references.get('monthly_trend_months', '-')),
+                    str(references.get('payment_modes_analyzed', '-'))
+                ])
+                ref_table = Table(ref_data, colWidths=[usable_width*0.2, usable_width*0.266, usable_width*0.266, usable_width*0.266])
+                ref_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f3f4f6')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#374151')),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Times-Bold'),
+                    ('FONTNAME', (0, 1), (-1, -1), 'Times-Roman'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 9),
+                    ('FONTSIZE', (0, 1), (-1, -1), 8),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
+                ]))
+                story.append(ref_table)
+                story.append(Spacer(1, 0.15*inch))
+            else:
+                story.append(Paragraph("AI Insights: API returned an error.", normal_style))
+                story.append(Spacer(1, 0.08*inch))
+        except Exception:
+            story.append(Paragraph("AI Insights: Failed to fetch insights from the AI service.", normal_style))
+            story.append(Spacer(1, 0.08*inch))
+
+        # If nothing added, add a placeholder note
+        if not ai_paragraphs_added:
+            story.append(Paragraph("AI Insights are unavailable.", small_style))
+            story.append(Spacer(1, 0.08*inch))
+
     # Compact Footer
     footer_style = ParagraphStyle(
         'Footer',
@@ -2557,363 +2661,16 @@ def generate_reportlab_pdf(report_data, sections, orientation):
         "HealthLedger Analytics System | Confidential",
         footer_style
     ))
-    
+
     # Build PDF
     doc.build(story)
-    
+
     # Get PDF bytes
     pdf_bytes = buffer.getvalue()
     buffer.close()
-    
+
     return pdf_bytes
-    """
-    Generate and return a PDF report containing selected analytics sections.
-    Accepts POST with sections array, orientation, and options.
-    Uses server-side PDF generation (WeasyPrint recommended) or returns data for client-side generation.
     
-    Security: Only authenticated users can generate reports.
-    Endpoint: /api/generate_report/
-    """
-    if request.method != 'POST':
-        return JsonResponse({"error": "Method not allowed"}, status=405)
-    
-    # Check authentication
-    auth_token = request.COOKIES.get('auth_token')
-    if not auth_token or not request.session.get(f'{auth_token}_is_authenticated'):
-        return JsonResponse({"error": "Unauthorized"}, status=401)
-    
-    try:
-        # Parse request body
-        try:
-            body = json.loads(request.body)
-        except json.JSONDecodeError:
-            return JsonResponse({"error": "Invalid JSON"}, status=400)
-        
-        sections = body.get('sections', [])
-        orientation = body.get('orientation', 'portrait')
-        include_charts = body.get('include_charts', True)
-        
-        if not sections:
-            return JsonResponse({"error": "No sections selected"}, status=400)
-        
-        # Collect data for selected sections
-        report_data = {
-            'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'orientation': orientation,
-            'sections': {}
-        }
-        
-        # Map section IDs to data fetching functions
-        if 'kpi-section' in sections:
-            # Fetch KPI data
-            financial_query = """
-                SELECT 
-                    COALESCE(SUM(AMOUNT), 0) AS TOTAL_REVENUE,
-                    COALESCE(SUM(PAID_AMOUNT_ON_DATE), 0) AS TOTAL_COLLECTED,
-                    COALESCE(SUM(REMAINING_AMOUNT_ON_DATE), 0) AS OUTSTANDING
-                FROM INVOICE_LOGS
-            """
-            patient_count_query = """
-                SELECT COUNT(DISTINCT UID) AS TOTAL_PATIENTS
-                FROM PATIENT_DATA
-            """
-            
-            success1, fin_result = DB2Query.runSelectQuery(financial_query)
-            success2, pat_result = DB2Query.runSelectQuery(patient_count_query)
-            
-            if success1 and fin_result and success2 and pat_result:
-                report_data['sections']['kpi'] = {
-                    'total_revenue': float(fin_result[0].get('TOTAL_REVENUE', 0)),
-                    'total_collected': float(fin_result[0].get('TOTAL_COLLECTED', 0)),
-                    'outstanding': float(fin_result[0].get('OUTSTANDING', 0)),
-                    'total_patients': int(pat_result[0].get('TOTAL_PATIENTS', 0))
-                }
-        
-        if 'revenue-trend-section' in sections:
-            # Fetch monthly revenue trend
-            query = """
-                SELECT 
-                    SUBSTR(CHAR(LOG_DATE), 1, 7) AS MONTH,
-                    COALESCE(SUM(PAID_AMOUNT_ON_DATE), 0) AS REVENUE
-                FROM INVOICE_LOGS
-                WHERE LOG_DATE >= CURRENT_DATE - 12 MONTHS
-                GROUP BY SUBSTR(CHAR(LOG_DATE), 1, 7)
-                ORDER BY MONTH ASC
-            """
-            success, result = DB2Query.runSelectQuery(query)
-            if success and result:
-                report_data['sections']['revenue_trend'] = [
-                    {'month': row['MONTH'], 'revenue': float(row['REVENUE'])}
-                    for row in result
-                ]
-        
-        if 'payment-modes-section' in sections:
-            # Fetch payment modes
-            query = """
-                SELECT 
-                    UPPER(COALESCE(PAYMENT_MODE, 'UNKNOWN')) AS MODE,
-                    COUNT(*) AS COUNT,
-                    COALESCE(SUM(PAID_AMOUNT_ON_DATE), 0) AS AMOUNT
-                FROM INVOICE_LOGS
-                WHERE PAYMENT_MODE IS NOT NULL
-                GROUP BY UPPER(PAYMENT_MODE)
-                ORDER BY AMOUNT DESC
-            """
-            success, result = DB2Query.runSelectQuery(query)
-            if success and result:
-                report_data['sections']['payment_modes'] = [
-                    {'mode': row['MODE'], 'count': int(row['COUNT']), 'amount': float(row['AMOUNT'])}
-                    for row in result
-                ]
-        
-        if 'top-patients-section' in sections:
-            # Fetch top paying patients
-            query = """
-                SELECT 
-                    p.UID,
-                    p.USERNAME,
-                    COALESCE(SUM(il.PAID_AMOUNT_ON_DATE), 0) AS TOTAL_PAID
-                FROM PATIENT_DATA p
-                LEFT JOIN INVOICE_LOGS il ON p.INNVOCE_NUM = il.INVOICE_NUMBER
-                GROUP BY p.UID, p.USERNAME
-                ORDER BY TOTAL_PAID DESC
-                FETCH FIRST 10 ROWS ONLY
-            """
-            success, result = DB2Query.runSelectQuery(query)
-            if success and result:
-                report_data['sections']['top_patients'] = [
-                    {'uid': row['UID'], 'name': row['USERNAME'], 'total_paid': float(row['TOTAL_PAID'])}
-                    for row in result
-                ]
-        
-        if 'invoice-volume-section' in sections:
-            # Fetch invoice volume
-            query = """
-                SELECT 
-                    SUBSTR(CHAR(DATE), 1, 7) AS MONTH,
-                    COUNT(*) AS COUNT
-                FROM PATIENT_DATA
-                WHERE DATE >= CURRENT_DATE - 12 MONTHS
-                GROUP BY SUBSTR(CHAR(DATE), 1, 7)
-                ORDER BY MONTH ASC
-            """
-            success, result = DB2Query.runSelectQuery(query)
-            if success and result:
-                report_data['sections']['invoice_volume'] = [
-                    {'month': row['MONTH'], 'count': int(row['COUNT'])}
-                    for row in result
-                ]
-        
-        if 'activity-logs-section' in sections:
-            # Fetch recent activity logs
-            query = """
-                SELECT LOG_NAME, LOG_DESC, LOG_DATE_TIME
-                FROM ACTIVITY
-                ORDER BY LOG_DATE_TIME DESC
-                FETCH FIRST 20 ROWS ONLY
-            """
-            success, result = DB2Query.runSelectQuery(query)
-            if success and result:
-                report_data['sections']['activity_logs'] = [
-                    {
-                        'log_name': row['LOG_NAME'],
-                        'log_desc': row['LOG_DESC'],
-                        'log_date_time': str(row['LOG_DATE_TIME'])
-                    }
-                    for row in result
-                ]
-        
-        if 'patients-list-section' in sections:
-            # Fetch all patients with payment status
-            query = """
-                SELECT 
-                    p.UID,
-                    p.USERNAME,
-                    p.INNVOCE_NUM,
-                    p.DATE,
-                    p.AMOUNT,
-                    COALESCE(SUM(il.PAID_AMOUNT_ON_DATE), 0) AS PAID_AMOUNT
-                FROM PATIENT_DATA p
-                LEFT JOIN INVOICE_LOGS il ON p.INNVOCE_NUM = il.INVOICE_NUMBER
-                GROUP BY p.UID, p.USERNAME, p.INNVOCE_NUM, p.DATE, p.AMOUNT
-                ORDER BY p.DATE DESC
-            """
-            success, result = DB2Query.runSelectQuery(query)
-            if success and result:
-                report_data['sections']['patients_list'] = [
-                    {
-                        'uid': row['UID'],
-                        'username': row['USERNAME'],
-                        'invoice_num': row['INNVOCE_NUM'],
-                        'date': str(row['DATE']),
-                        'amount': float(row['AMOUNT']),
-                        'paid_amount': float(row['PAID_AMOUNT']),
-                        'remaining_amount': float(row['AMOUNT']) - float(row['PAID_AMOUNT']),
-                        'remark': 'Paid' if float(row['AMOUNT']) <= float(row['PAID_AMOUNT']) else 'Pending'
-                    }
-                    for row in result
-                ]
-        
-        if 'ai-insights-section' in sections:
-            # Note: AI insights would need to be re-generated or cached
-            # For now, include a placeholder
-            report_data['sections']['ai_insights'] = {
-                'note': 'AI insights should be generated separately before report generation.'
-            }
-        
-        # Generate HTML for the report
-        html_content = generate_report_html(report_data, sections)
-        
-        # Try server-side PDF generation using WeasyPrint
-        try:
-            from weasyprint import HTML, CSS
-            from io import BytesIO
-            import logging
-            
-            logger = logging.getLogger(__name__)
-            logger.info("Starting PDF generation with WeasyPrint")
-            
-            # Simplified CSS that works better with WeasyPrint
-            css_content = '''
-                @page {
-                    size: A4 ''' + orientation + ''';
-                    margin: 2cm;
-                }
-                body {
-                    font-family: Arial, sans-serif;
-                    color: #333;
-                    background-color: white;
-                }
-                h1 { 
-                    color: #1e40af; 
-                    font-size: 24px; 
-                    margin-bottom: 10px; 
-                    page-break-after: avoid;
-                }
-                h2 { 
-                    color: #3b82f6; 
-                    font-size: 18px; 
-                    margin-top: 20px; 
-                    margin-bottom: 10px;
-                    page-break-after: avoid;
-                }
-                table { 
-                    width: 100%; 
-                    border-collapse: collapse; 
-                    margin: 10px 0 20px 0;
-                    page-break-inside: auto;
-                }
-                tr {
-                    page-break-inside: avoid;
-                    page-break-after: auto;
-                }
-                th, td { 
-                    border: 1px solid #ddd; 
-                    padding: 8px; 
-                    text-align: left;
-                    font-size: 11px;
-                }
-                th { 
-                    background-color: #3b82f6; 
-                    color: white;
-                    font-weight: bold;
-                }
-                .kpi-table {
-                    margin: 20px 0;
-                }
-                .kpi-table td {
-                    padding: 15px;
-                    font-size: 14px;
-                }
-                .kpi-value { 
-                    font-size: 24px; 
-                    font-weight: bold; 
-                    color: #1e40af;
-                    margin-bottom: 5px;
-                }
-                .kpi-label { 
-                    font-size: 11px; 
-                    color: #666;
-                }
-                .status-paid {
-                    color: #10b981;
-                    font-weight: bold;
-                }
-                .status-pending {
-                    color: #f59e0b;
-                    font-weight: bold;
-                }
-                hr {
-                    border: none;
-                    border-top: 1px solid #ddd;
-                    margin: 20px 0;
-                }
-                .footer {
-                    text-align: center;
-                    color: #666;
-                    font-size: 10px;
-                    margin-top: 30px;
-                    page-break-before: avoid;
-                }
-            '''
-            
-            # Generate PDF
-            logger.info("Creating PDF from HTML")
-            pdf_file = BytesIO()
-            
-            html_doc = HTML(string=html_content)
-            css_doc = CSS(string=css_content)
-            
-            html_doc.write_pdf(pdf_file, stylesheets=[css_doc])
-            
-            logger.info("PDF generated successfully")
-            
-            # Return PDF
-            pdf_file.seek(0)
-            pdf_bytes = pdf_file.read()
-            
-            logger.info(f"PDF size: {len(pdf_bytes)} bytes")
-            
-            # Verify PDF is not empty
-            if len(pdf_bytes) == 0:
-                raise Exception("Generated PDF is empty")
-            
-            # Verify PDF header
-            if not pdf_bytes.startswith(b'%PDF'):
-                raise Exception("Generated file is not a valid PDF")
-            
-            response = HttpResponse(pdf_bytes, content_type='application/pdf')
-            response['Content-Disposition'] = f'attachment; filename="HealthLedger_Report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf"'
-            response['Content-Length'] = len(pdf_bytes)
-            
-            logger.info("PDF response prepared successfully")
-            return response
-            
-        except ImportError as e:
-            # WeasyPrint not installed - return HTML for client-side generation
-            return JsonResponse({
-                'error': 'WeasyPrint not installed',
-                'html': html_content,
-                'data': report_data,
-                'message': 'Server-side PDF generation unavailable. Use client-side method.'
-            }, status=503)
-        except Exception as pdf_error:
-            # PDF generation failed - log and return error
-            import traceback
-            error_details = traceback.format_exc()
-            print(f"PDF Generation Error: {str(pdf_error)}")
-            print(f"Traceback:\n{error_details}")
-            
-            return JsonResponse({
-                "error": f"PDF generation failed: {str(pdf_error)}",
-                "message": "Please try the client-side PDF option instead.",
-                "details": error_details
-            }, status=500)
-            
-    except Exception as e:
-        return JsonResponse({
-            "error": f"Error generating report: {str(e)}"
-        }, status=500)
 
 def generate_report_html(report_data, sections):
     """
@@ -3146,3 +2903,78 @@ def generate_report_html(report_data, sections):
 # ===================================================== ANALYTICS VIEWS
 
 # ===================================================== API VIEWS
+
+# New API endpoints for CREATE form enhancements
+def api_get_all_uids(request):
+    """Get all unique UIDs with their usernames from AUTHENTICATION table"""
+    query = """
+        SELECT DISTINCT UID, NAME, EMAIL 
+        FROM AUTHENTICATION 
+        WHERE FLAG = 'P'
+        ORDER BY UID
+    """
+    success, result = DB2Query.runSelectQuery(query)
+    
+    if not success or not result:
+        return JsonResponse([], safe=False)
+    
+    users = [
+        {
+            "uid": row.get("UID"),
+            "name": row.get("NAME"),
+            "email": row.get("EMAIL")
+        }
+        for row in result
+    ]
+    
+    return JsonResponse(users, safe=False)
+
+def api_generate_invoice_number(request):
+    """Generate a unique invoice number based on existing invoices"""
+    query = """
+        SELECT INNVOCE_NUM 
+        FROM patient_data 
+        ORDER BY REC_NUMBER DESC 
+        FETCH FIRST 1 ROW ONLY
+    """
+    success, result = DB2Query.runSelectQuery(query)
+    
+    if not success or not result:
+        # If no invoices exist, start with INV00000001
+        new_invoice_num = "INV00000001"
+    else:
+        last_invoice = result[0].get("INNVOCE_NUM", "INV00000000")
+        # Extract the numeric part and increment
+        try:
+            num_part = int(last_invoice.replace("INV", ""))
+            new_num = num_part + 1
+            new_invoice_num = f"INV{new_num:08d}"
+        except:
+            new_invoice_num = "INV00000001"
+    
+    return JsonResponse({"invoice_number": new_invoice_num})
+
+def api_get_user_by_uid(request):
+    """Get user details by UID"""
+    uid = request.GET.get('uid')
+    if not uid:
+        return JsonResponse({"error": "UID is required"}, status=400)
+    
+    query = f"""
+        SELECT UID, NAME, EMAIL 
+        FROM AUTHENTICATION 
+        WHERE UID = '{uid}' AND FLAG = 'P'
+        FETCH FIRST 1 ROW ONLY
+    """
+    success, result = DB2Query.runSelectQuery(query)
+    
+    if not success or not result:
+        return JsonResponse({"error": "User not found"}, status=404)
+    
+    user_data = {
+        "uid": result[0].get("UID"),
+        "name": result[0].get("NAME"),
+        "email": result[0].get("EMAIL")
+    }
+    
+    return JsonResponse(user_data)

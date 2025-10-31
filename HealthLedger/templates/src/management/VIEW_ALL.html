@@ -7,6 +7,18 @@
     {% load static %}
     <link href="{% static 'css/output.css' %}" rel="stylesheet">
     <style>
+        /* KPI Card Gradient Theme */
+        .kpi-card {
+            background: linear-gradient(135deg, #18181b 0%, #27272a 100%);
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
         /* Spreadsheet-like resizer styles */
         #recordsTable { position: relative; table-layout: fixed; }
         #recordsTable th { position: relative; }
@@ -177,7 +189,7 @@
     <div class="max-w-8xl mx-auto px-12 py-3 sm:px-8 lg:px-8">
         <div class="w-full flex flex-row justify-end">
             <button id="toggleStatsBtn" type="button" aria-expanded="false"
-                class="inline-flex items-center gap-2 px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-100 hover:bg-zinc-700 focus:outline-none">
+                class="inline-flex items-center gap-2 px-4 py-2 bg-zinc-700 hover:bg-zinc-600 border border-zinc-600 rounded-lg text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-600 focus:ring-offset-zinc-900 transition-all duration-200 shadow-md mb-2">
                 <!-- Eye (visible when stats are hidden -> button shows "Show Stats" + eye icon) -->
                 <span id="eyeIcon" class="inline-flex">
                     <svg id="icon-eye" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-zinc-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -201,82 +213,66 @@
         
             <!-- Stats Grid (hidden by default, toggled by button) -->
         
-        <div id="statsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 mb-2 mt-2">
+        <div id="statsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 mt-2">
             
             <!-- Stat Card 1 -->
-            <div class="bg-zinc-800 rounded-lg p-6 border border-zinc-700">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-zinc-400">Total Records</p>
-                        <p class="text-3xl font-semibold text-zinc-100 mt-2" id="total_records">----</p>
-                        <p class="text-xs text-green-400 mt-2">+12% from last month</p>
-                    </div>
-                    <div class="w-12 h-12 bg-zinc-700 rounded-lg flex items-center justify-center">
-                        <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                        </svg>
-                    </div>
+            <div class="kpi-card rounded-lg p-6 border border-zinc-700 shadow-lg fade-in">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-medium text-zinc-400">Total Records</h3>
+                    <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
                 </div>
+                <div class="text-3xl font-bold text-zinc-100" id="total_records">----</div>
+                <p class="text-xs text-zinc-500 mt-2">+12% from last month</p>
             </div>
 
             <!-- Stat Card 2 -->
-            <div class="bg-zinc-800 rounded-lg p-6 border border-zinc-700">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-zinc-400">Total Revenue</p>
-                        <p class="text-3xl font-semibold text-zinc-100 mt-2" id="total_revenue">----</p>
-                        <p class="text-xs text-green-400 mt-2">+8% from last month</p>
-                    </div>
-                    <div class="w-12 h-12 bg-zinc-700 rounded-lg flex items-center justify-center">
-                        <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                    </div>
+            <div class="kpi-card rounded-lg p-6 border border-zinc-700 shadow-lg fade-in">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-medium text-zinc-400">Total Revenue</h3>
+                    <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
                 </div>
+                <div class="text-3xl font-bold text-zinc-100" id="total_revenue">----</div>
+                <p class="text-xs text-zinc-500 mt-2">+8% from last month</p>
             </div>
 
             <!-- Stat Card 3 -->
-            <div class="bg-zinc-800 rounded-lg p-6 border border-zinc-700">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-zinc-400">Total Pending Amount</p>
-                        <p class="text-3xl font-semibold text-zinc-100 mt-2" id="total_pending_amount">----</p>
-                        <p class="text-xs text-yellow-400 mt-2">Requires attention</p>
-                    </div>
-                    <div class="w-12 h-12 bg-zinc-700 rounded-lg flex items-center justify-center">
-                        <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                    </div>
+            <div class="kpi-card rounded-lg p-6 border border-zinc-700 shadow-lg fade-in">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-medium text-zinc-400">Total Pending Amount</h3>
+                    <svg class="w-6 h-6 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
                 </div>
+                <div class="text-3xl font-bold text-zinc-100" id="total_pending_amount">----</div>
+                <p class="text-xs text-zinc-500 mt-2">Requires attention</p>
             </div>
 
             <!-- Stat Card 4 -->
-            <div class="bg-zinc-800 rounded-lg p-6 border border-zinc-700">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-zinc-400">Completed</p>
-                        <p class="text-3xl font-semibold text-zinc-100 mt-2" id="total_paid_customers">----</p>
-                        <p class="text-xs text-green-400 mt-2" id="completion_rate">88.6% completion rate</p>
-                    </div>
-                    <div class="w-12 h-12 bg-zinc-700 rounded-lg flex items-center justify-center">
-                        <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                    </div>
+            <div class="kpi-card rounded-lg p-6 border border-zinc-700 shadow-lg fade-in">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-medium text-zinc-400">Completed</h3>
+                    <svg class="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
                 </div>
+                <div class="text-3xl font-bold text-zinc-100" id="total_paid_customers">----</div>
+                <p class="text-xs text-zinc-500 mt-2" id="completion_rate">88.6% completion rate</p>
             </div>
         </div>
 
 
         <!-- Recent Records Table -->
-        <div class="mt-2 bg-zinc-800 rounded-lg shadow-2xl overflow-hidden border border-zinc-700">
-            <div id="filtersContainer" class="flex flex-row items-end gap-4 p-4 border-b border-zinc-700 bg-zinc-800">
+        <div class="mt-2 kpi-card rounded-lg shadow-lg overflow-hidden border border-zinc-700 fade-in">
+            <div id="filtersContainer" class="flex flex-row items-end gap-4 p-4 border-b border-zinc-700 bg-gradient-to-r from-zinc-800/50 to-zinc-900/50">
 
                 <!-- Page size selector -->
                 <div class="flex flex-col w-full">
                     <label for="pageSizeSelect" class="text-zinc-400 text-sm mb-1">Show</label>
-                    <select id="pageSizeSelect" class="px-3 py-2 rounded-lg bg-zinc-700 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full" onchange="onPageSizeChanged()">
+                    <select id="pageSizeSelect" class="px-3 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 border border-zinc-600 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-zinc-900 w-full transition-colors duration-200" onchange="onPageSizeChanged()">
                         <option value="10">10</option>
                         <option value="50" selected>50</option>
                         <option value="100">100</option>
@@ -294,7 +290,7 @@
                     <svg class="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"></path>
                     </svg>
-                    <input id="searchInput" type="text" placeholder="Search records, invoice, name..." class="pl-10 pr-4 py-2 rounded-lg bg-zinc-700 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-auto md:flex-1" onkeyup="applyFilters()">
+                    <input id="searchInput" type="text" placeholder="Search records, invoice, name..." class="pl-10 pr-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 border border-zinc-600 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-zinc-900 w-full md:w-auto md:flex-1 transition-colors duration-200" onkeyup="applyFilters()">
                     </div>
                 </div>
 
@@ -302,11 +298,11 @@
                 <div class="flex gap-3 w-full md:w-auto">
                     <div class="flex flex-col">
                     <label for="dateFrom" class="text-zinc-400 text-sm mb-1">From</label>
-                    <input id="dateFrom" type="date" class="px-3 py-2 rounded-lg bg-zinc-700 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-40" onchange="applyFilters()">
+                    <input id="dateFrom" type="date" class="px-3 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 border border-zinc-600 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-zinc-900 w-40 transition-colors duration-200" onchange="applyFilters()">
                     </div>
                     <div class="flex flex-col">
                     <label for="dateTo" class="text-zinc-400 text-sm mb-1">To</label>
-                    <input id="dateTo" type="date" class="px-3 py-2 rounded-lg bg-zinc-700 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-40" onchange="applyFilters()">
+                    <input id="dateTo" type="date" class="px-3 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 border border-zinc-600 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-zinc-900 w-40 transition-colors duration-200" onchange="applyFilters()">
                     </div>
                 </div>
 
@@ -334,7 +330,7 @@
 
                 <!-- Clear -->
                 <div class="flex items-center md:pl-2">
-                    <button type="button" onclick="clearFilters()" class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-sm text-zinc-100">Clear</button>
+                    <button type="button" onclick="clearFilters()" class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 border border-zinc-600 rounded-lg text-sm text-zinc-100 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-600 focus:ring-offset-zinc-900">Clear</button>
                 </div>
 
 
@@ -365,10 +361,29 @@
                 </table>
             </div>
             
-            <!-- Reset Column Width Button -->
-            <div class="p-4 border-t border-zinc-700 flex justify-end">
+            <!-- Action Buttons -->
+            <div class="p-4 border-t border-zinc-700 flex justify-end gap-3 bg-gradient-to-r from-zinc-800/30 to-zinc-900/30">
+                <!-- Download CSV Button -->
+                <button id="downloadCSVBtn" type="button" onclick="downloadCSV()" 
+                    class="px-4 py-2 bg-green-700 hover:bg-green-600 border border-green-600 rounded-lg text-sm text-zinc-100 transition-colors duration-200 flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-600 focus:ring-offset-zinc-900 shadow-md">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Download CSV
+                </button>
+
+                <!-- Download PDF Button -->
+                <button id="downloadPDFBtn" type="button" onclick="downloadPDF()" 
+                    class="px-4 py-2 bg-red-700 hover:bg-red-600 border border-red-600 rounded-lg text-sm text-zinc-100 transition-colors duration-200 flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-600 focus:ring-offset-zinc-900 shadow-md">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    Download PDF
+                </button>
+
+                <!-- Reset Column Width Button -->
                 <button id="resetColumnWidthBtn" type="button" onclick="resetColumnWidths()" 
-                    class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-sm text-zinc-100 transition-colors duration-200 flex items-center gap-2">
+                    class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 border border-zinc-600 rounded-lg text-sm text-zinc-100 transition-colors duration-200 flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-600 focus:ring-offset-zinc-900 shadow-md">
                     <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
@@ -381,7 +396,7 @@
     </div>
 
     <!-- Percentage Button (Bottom Right Corner) -->
-    <button id="percentageBtn" class="hidden px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-lg font-semibold text-sm">
+    <button id="percentageBtn" class="hidden px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-lg font-semibold text-sm transition-all duration-200 hover:scale-105">
         0%
     </button>
 
@@ -1176,6 +1191,197 @@
                 
                 // Reload the page to apply default widths
                 window.location.reload();
+            }
+
+            // ============================================================
+            // Download Functions (CSV & PDF)
+            // ============================================================
+            
+            /**
+             * Downloads the current table data as CSV
+             */
+            function downloadCSV() {
+                const table = document.getElementById('recordsTable');
+                const tbody = table.querySelector('tbody');
+                const rows = Array.from(tbody.rows).filter(row => row.style.display !== 'none');
+                
+                if (rows.length === 0) {
+                    alert('No data available to download');
+                    return;
+                }
+
+                // CSV Headers
+                const headers = ['UID', 'Invoice #', 'Customer', 'Date', 'Amount', 'Paid Amount', 'Remaining', 'Status'];
+                let csvContent = headers.join(',') + '\n';
+
+                // CSV Data Rows
+                rows.forEach(row => {
+                    const cells = row.cells;
+                    const rowData = [
+                        escapeCsvField(cells[0].textContent.trim()), // UID
+                        escapeCsvField(cells[1].textContent.trim()), // Invoice #
+                        escapeCsvField(cells[2].textContent.trim()), // Customer
+                        escapeCsvField(cells[3].textContent.trim()), // Date
+                        escapeCsvField(cells[4].textContent.trim().replace(/₹/g, 'Rs.')), // Amount
+                        escapeCsvField(cells[5].textContent.trim().replace(/₹/g, 'Rs.')), // Paid Amount
+                        escapeCsvField(cells[6].textContent.trim().replace(/₹/g, 'Rs.')), // Remaining
+                        escapeCsvField(cells[7].textContent.trim())  // Status
+                    ];
+                    csvContent += rowData.join(',') + '\n';
+                });
+
+                // Create blob and download
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+                
+                link.setAttribute('href', url);
+                link.setAttribute('download', `HealthLedger_Records_${timestamp}.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            }
+
+            /**
+             * Escapes CSV field to handle commas, quotes, and newlines
+             */
+            function escapeCsvField(field) {
+                if (field.includes(',') || field.includes('"') || field.includes('\n')) {
+                    return '"' + field.replace(/"/g, '""') + '"';
+                }
+                return field;
+            }
+
+            /**
+             * Downloads the current table data as PDF using jsPDF library
+             */
+            function downloadPDF() {
+                const table = document.getElementById('recordsTable');
+                const tbody = table.querySelector('tbody');
+                const rows = Array.from(tbody.rows).filter(row => row.style.display !== 'none');
+                
+                if (rows.length === 0) {
+                    alert('No data available to download');
+                    return;
+                }
+
+                // Load jsPDF and autoTable dynamically
+                if (typeof window.jspdf === 'undefined') {
+                    const script1 = document.createElement('script');
+                    script1.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+                    script1.onload = () => {
+                        const script2 = document.createElement('script');
+                        script2.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js';
+                        script2.onload = () => generatePDF(rows);
+                        document.head.appendChild(script2);
+                    };
+                    document.head.appendChild(script1);
+                } else {
+                    generatePDF(rows);
+                }
+            }
+
+            /**
+             * Generates PDF using jsPDF and autoTable
+             */
+            function generatePDF(rows) {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('l', 'mm', 'a4'); // landscape, millimeters, A4
+
+                // Title
+                doc.setFontSize(18);
+                doc.setTextColor(40);
+                doc.text('HealthLedger - Records Report', 14, 20);
+
+                // Date generated
+                doc.setFontSize(10);
+                doc.setTextColor(100);
+                const dateStr = new Date().toLocaleString();
+                doc.text(`Generated: ${dateStr}`, 14, 28);
+
+                // Prepare table data
+                const headers = [['UID', 'Invoice #', 'Customer', 'Date', 'Amount', 'Paid Amount', 'Remaining', 'Status']];
+                const data = rows.map(row => {
+                    const cells = row.cells;
+                    return [
+                        cells[0].textContent.trim(), // UID
+                        cells[1].textContent.trim(), // Invoice #
+                        cells[2].textContent.trim(), // Customer
+                        cells[3].textContent.trim(), // Date
+                        cells[4].textContent.trim().replace(/₹/g, 'Rs.'), // Amount
+                        cells[5].textContent.trim().replace(/₹/g, 'Rs.'), // Paid Amount
+                        cells[6].textContent.trim().replace(/₹/g, 'Rs.'), // Remaining
+                        cells[7].textContent.trim()  // Status
+                    ];
+                });
+
+                // Generate table
+                doc.autoTable({
+                    head: headers,
+                    body: data,
+                    startY: 35,
+                    theme: 'grid',
+                    styles: {
+                        fontSize: 8,
+                        cellPadding: 2,
+                        overflow: 'linebreak',
+                        halign: 'left'
+                    },
+                    headStyles: {
+                        fillColor: [24, 24, 27], // zinc-900
+                        textColor: [244, 244, 245], // zinc-100
+                        fontStyle: 'bold',
+                        halign: 'left'
+                    },
+                    alternateRowStyles: {
+                        fillColor: [250, 250, 250]
+                    },
+                    columnStyles: {
+                        0: { cellWidth: 25 },  // UID
+                        1: { cellWidth: 30 },  // Invoice #
+                        2: { cellWidth: 45 },  // Customer
+                        3: { cellWidth: 28 },  // Date
+                        4: { cellWidth: 30 },  // Amount
+                        5: { cellWidth: 30 },  // Paid Amount
+                        6: { cellWidth: 30 },  // Remaining
+                        7: { cellWidth: 25 }   // Status
+                    },
+                    didParseCell: function(data) {
+                        // Color code status column
+                        if (data.column.index === 7 && data.section === 'body') {
+                            const status = data.cell.text[0];
+                            if (status && status.toLowerCase().includes('paid')) {
+                                data.cell.styles.textColor = [34, 197, 94]; // green
+                                data.cell.styles.fontStyle = 'bold';
+                            } else if (status && status.toLowerCase().includes('pending')) {
+                                data.cell.styles.textColor = [239, 68, 68]; // red
+                                data.cell.styles.fontStyle = 'bold';
+                            }
+                        }
+                    },
+                    margin: { top: 35, left: 14, right: 14 }
+                });
+
+                // Add footer with page numbers
+                const pageCount = doc.internal.getNumberOfPages();
+                for (let i = 1; i <= pageCount; i++) {
+                    doc.setPage(i);
+                    doc.setFontSize(8);
+                    doc.setTextColor(150);
+                    doc.text(
+                        `Page ${i} of ${pageCount}`,
+                        doc.internal.pageSize.getWidth() / 2,
+                        doc.internal.pageSize.getHeight() - 10,
+                        { align: 'center' }
+                    );
+                }
+
+                // Save PDF
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+                doc.save(`HealthLedger_Records_${timestamp}.pdf`);
             }
 
             // ============================================================

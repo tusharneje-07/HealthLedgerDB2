@@ -6,6 +6,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Logout - HealthLedger</title>
     <link href="{% static 'css/output.css' %}" rel="stylesheet">
+    <style>
+        .kpi-card {
+            background: linear-gradient(135deg, #18181b 0%, #27272a 100%);
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
 </head>
 <body class="bg-zinc-900 text-zinc-100 min-h-screen flex flex-col">
 
@@ -25,21 +37,21 @@
 
     <!-- Logout Message Section -->
     <main class="flex-grow flex items-center justify-center px-6">
-        <div class="bg-zinc-800 border border-zinc-700 rounded-2xl p-10 text-center shadow-lg w-full max-w-md">
+        <div class="kpi-card border border-zinc-700 rounded-2xl p-10 text-center shadow-lg w-full max-w-md fade-in">
             <div class="flex justify-center mb-6">
-                <svg class="w-16 h-16 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2H5V9h4V7l5 4-5 4zM12 19a7 7 0 100-14 7 7 0 000 14z"></path>
+                <svg class="w-16 h-16 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
                 </svg>
             </div>
             <h1 class="text-2xl font-semibold mb-2 text-zinc-100">You’ve been logged out</h1>
             <p class="text-zinc-400 mb-6">Thank you for using <span class="text-zinc-100 font-medium">HealthLedger</span>. We hope to see you again soon.</p>
 
-            <button onclick="window.location.href='/login'" class="w-full bg-emerald-500 hover:bg-emerald-600 text-zinc-100 font-medium py-2.5 rounded-lg transition-all duration-200 mb-2">
+            <button onclick="window.location.href='/login'" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-all duration-200 mb-3 shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 focus:ring-offset-zinc-900">
                 Log in again
             </button>
 
-            <button onclick="window.location.href='/logout/hard'" class="w-full bg-emerald-500 hover:bg-emerald-600 text-zinc-100 font-medium py-2.5 rounded-lg transition-all duration-200">
-                Logout
+            <button onclick="window.location.href='/logout/hard'" class="w-full bg-zinc-700 hover:bg-zinc-600 text-zinc-100 border border-zinc-600 font-medium py-2.5 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-600 focus:ring-offset-zinc-900">
+                Complete Logout
             </button>
 
             <p class="mt-4 text-sm text-zinc-500">

@@ -6,11 +6,101 @@
     <title>HealthLedger | Create New Record</title>
     {% load static %}
     <link href="{% static 'css/output.css' %}" rel="stylesheet">
+    <style>
+        /* Gradient card styling */
+        .kpi-card {
+            background: linear-gradient(135deg, #18181b 0%, #27272a 100%);
+            border: 1px solid #3f3f46;
+        }
+        
+        /* Fade-in animation */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        /* Custom searchable dropdown styles */
+        .searchable-dropdown {
+            position: relative;
+        }
+        
+        .dropdown-search-input {
+            width: 100%;
+        }
+        
+        .dropdown-options {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            max-height: 300px;
+            overflow-y: auto;
+            background: #18181b;
+            border: 1px solid #52525b;
+            border-top: none;
+            border-radius: 0 0 0.5rem 0.5rem;
+            z-index: 1000;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        }
+        
+        .dropdown-option {
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            transition: background-color 0.15s;
+            border-bottom: 1px solid #27272a;
+        }
+        
+        .dropdown-option:hover {
+            background-color: #27272a;
+        }
+        
+        .dropdown-option:last-child {
+            border-bottom: none;
+        }
+        
+        .dropdown-option.selected {
+            background-color: #3b82f6;
+            color: white;
+        }
+        
+        .no-results {
+            padding: 1rem;
+            text-align: center;
+            color: #71717a;
+        }
+
+        /* Custom scrollbar for dropdown */
+        .dropdown-options::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .dropdown-options::-webkit-scrollbar-track {
+            background: #18181b;
+        }
+        
+        .dropdown-options::-webkit-scrollbar-thumb {
+            background: #52525b;
+            border-radius: 4px;
+        }
+        
+        .dropdown-options::-webkit-scrollbar-thumb:hover {
+            background: #71717a;
+        }
+    </style>
 </head>
 <body class="bg-zinc-900 min-h-screen text-zinc-100">
 
     <!-- Navbar -->
-    <nav class="bg-zinc-800 border-b border-zinc-700 sticky top-0 z-50">
+    <nav class="kpi-card border-b border-zinc-600 sticky top-0 z-50 shadow-lg">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <!-- Logo -->
@@ -22,10 +112,10 @@
                 
                 <!-- Navigation Links -->
                 <div class="hidden md:flex space-x-6" style="cursor: pointer;">
-                    <a class="text-zinc-400 hover:text-zinc-300 transition-colors duration-200" onclick="window.location.href='/'">Dashboard</a>
+                    <a class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/'">Dashboard</a>
+                    <a class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/analytics'">Analytics</a>
                     <a class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/view_all'">Records</a>
-                    <a href="" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/logout'">Logout</a>
-
+                    <a class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/logout'">SleepOut</a>
                 </div>
                 
                 <!-- User Menu -->
@@ -46,78 +136,106 @@
     </nav>
 
     <!-- Main Content Container -->
-    <div class="max-w-full mx-auto px-4 py-12 sm:px-6 lg:px-8">
+    <div class="max-w-8xl mx-auto px-12 py-3 sm:px-8 lg:px-8">
         
         <!-- Form Card -->
-        <div class="bg-zinc-800 rounded-lg shadow-2xl overflow-hidden">
+        <div class="kpi-card rounded-lg shadow-2xl overflow-hidden fade-in">
             
             <!-- Header -->
-            <div class="px-8 py-6 border-b border-zinc-700">
-                <h1 class="text-2xl font-semibold text-zinc-100">Create New Record</h1>
+            <div class="px-8 py-6 border-b border-zinc-600">
+                <h1 class="text-2xl font-semibold text-zinc-100">Create New Invoice</h1>
+                <p class="mt-1 text-sm text-zinc-400">Add a new patient invoice record to the system</p>
             </div>
             
             <!-- Form Body -->
             <div class="p-8">
                 <form id="recordForm" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- UID Field -->
+                    <!-- UID Field - Searchable Dropdown -->
                     <div class="flex flex-col w-full">
-                        <label for="uid" class="text-sm font-medium text-zinc-400 mb-2">UID</label>
-                        <input type="text" id="uid" name="uid"
-                            class="w-full bg-zinc-700 border-0 rounded-lg px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-zinc-800 transition-all duration-200"
-                            placeholder="ABC999">
-                        <p class="mt-2 text-xs text-zinc-500">Enter Users Unique ID.</p>
+                        <label for="uid-search" class="block text-sm font-medium text-zinc-400 mb-2">Patient UID</label>
+                        <div class="searchable-dropdown">
+                            <input 
+                                type="text" 
+                                id="uid-search" 
+                                class="dropdown-search-input w-full bg-zinc-900/60 border border-zinc-600 rounded-lg px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all duration-200"
+                                placeholder="Type to search Patient UID..."
+                                autocomplete="off"
+                                required>
+                            <input type="hidden" id="uid" name="uid" required>
+                            <div id="dropdown-options" class="dropdown-options hidden"></div>
+                        </div>
+                        <p class="mt-2 text-xs text-zinc-500">Type to search and select from existing patient UIDs.</p>
                     </div>
 
-                    <!-- USERNAME Field -->
+                    <!-- USERNAME Field - Auto-filled, readonly -->
                     <div class="flex flex-col w-full">
-                        <label for="username" class="text-sm font-medium text-zinc-400 mb-2">Name of Patient</label>
+                        <label for="username" class="block text-sm font-medium text-zinc-400 mb-2">Name of Patient</label>
                         <input type="text" id="username" name="username"
-                            class="w-full bg-zinc-700 border-0 rounded-lg px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-zinc-800 transition-all duration-200"
-                            placeholder="Enter username">
+                            class="w-full bg-zinc-900/60 border border-zinc-600 rounded-lg px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all duration-200"
+                            placeholder="Auto-filled after UID selection"
+                            readonly
+                            required>
+                        <p class="mt-2 text-xs text-zinc-500">Auto-filled based on selected UID.</p>
                     </div>
 
-                    <!-- INVOICE_NUM Field -->
+                    <!-- INVOICE_NUM Field - Auto-generated, readonly -->
                     <div class="flex flex-col w-full">
-                        <label for="invoiceNum" class="text-sm font-medium text-zinc-400 mb-2">Invoice Number</label>
+                        <label for="invoiceNum" class="block text-sm font-medium text-zinc-400 mb-2">Invoice Number</label>
                         <input type="text" id="invoiceNum" name="invoiceNum"
-                            class="w-full bg-zinc-700 border-0 rounded-lg px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-zinc-800 transition-all duration-200"
-                            placeholder="INV00000001">
-                    </div>
-
-                    <!-- DATE Field -->
-                    <div class="flex flex-col w-full">
-                        <label for="date" class="text-sm font-medium text-zinc-400 mb-2">Date</label>
-                        <input type="date" id="date" name="date"
-                            class="w-full bg-zinc-700 border-0 rounded-lg px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-zinc-800 transition-all duration-200">
+                            class="w-full bg-zinc-900/60 border border-zinc-600 rounded-lg px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all duration-200"
+                            placeholder="Auto-generated"
+                            readonly
+                            required>
+                        <p class="mt-2 text-xs text-zinc-500">Automatically generated unique invoice number.</p>
                     </div>
 
                     <!-- AMOUNT Field -->
                     <div class="flex flex-col w-full">
-                        <label for="amount" class="text-sm font-medium text-zinc-400 mb-2">Amount</label>
+                        <label for="amount" class="block text-sm font-medium text-zinc-400 mb-2">Amount (₹)</label>
                         <input type="number" step="0.01" id="amount" name="amount"
-                            class="w-full bg-zinc-700 border-0 rounded-lg px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-zinc-800 transition-all duration-200"
-                            placeholder="0.00">
+                            class="w-full bg-zinc-900/60 border border-zinc-600 rounded-lg px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all duration-200"
+                            placeholder="0.00"
+                            required
+                            min="0.01">
+                        <p class="mt-2 text-xs text-zinc-500">Enter the invoice amount.</p>
                     </div>
 
                     <!-- Success/Error Message Area (full width) -->
                     <div class="md:col-span-2" id="messageContainer" class="hidden">
-                        <div id="successMessage" class="hidden bg-green-900/30 border border-green-700 text-green-400 px-4 py-3 rounded-lg">
-                            Record created successfully!
+                        <div id="successMessage" class="hidden kpi-card border border-green-600 text-green-400 px-4 py-3 rounded-lg">
+                            <div class="flex items-center gap-2">
+                                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                </svg>
+                                <span>Record created successfully!</span>
+                            </div>
                         </div>
-                        <div id="errorMessage" class="hidden bg-red-900/30 border border-red-700 text-red-400 px-4 py-3 rounded-lg">
-                            Error creating record. Please try again.
+                        <div id="errorMessage" class="hidden kpi-card border border-red-600 text-red-400 px-4 py-3 rounded-lg">
+                            <div class="flex items-center gap-2">
+                                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                                </svg>
+                                <span id="errorMessageText">Error creating record. Please try again.</span>
+                            </div>
                         </div>
                     </div>
 
                     <!-- Action Buttons (full width) -->
-                    <div class="md:col-span-2 flex flex-col-reverse sm:flex-row gap-3 pt-4">
+                    <div class="md:col-span-2 flex flex-col-reverse sm:flex-row gap-3">
                         <button type="button" onclick="window.history.back()"
                             class="flex-1 px-6 py-3 bg-zinc-700 hover:bg-zinc-600 text-zinc-400 hover:text-zinc-100 font-medium rounded-lg transition-all duration-200 border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-600 focus:ring-offset-zinc-800">
                             Cancel
                         </button>
-                        <button type="submit"
-                            class="flex-1 px-6 py-3 bg-zinc-200 hover:bg-zinc-100 text-zinc-900 font-medium rounded-lg transition-all duration-200 border-0 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-200 focus:ring-offset-zinc-800">
-                            Lock-in
+                        <button type="submit" id="submitBtn"
+                            class="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-all duration-200 border-0 shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 focus:ring-offset-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <span id="submitBtnText">Create Record</span>
+                            <span id="submitBtnLoader" class="hidden">
+                                <svg class="animate-spin h-5 w-5 inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Processing...
+                            </span>
                         </button>
                     </div>
                 </form>
@@ -125,48 +243,270 @@
         </div>
     </div>
     <script>
-        document.getElementById('recordForm').addEventListener('submit', function(e) {
+        // Store all users data
+        let allUsers = [];
+        let selectedUser = null;
+
+        // Load all UIDs on page load
+        async function loadUIDs() {
+            try {
+                const response = await fetch('/api/get_all_uids/');
+                const users = await response.json();
+                allUsers = users;
+                
+                // Show all options initially when clicking on the input
+                setupSearchableDropdown();
+            } catch (error) {
+                console.error('Error loading UIDs:', error);
+                showError('Failed to load patient list');
+            }
+        }
+
+        // Setup searchable dropdown functionality
+        function setupSearchableDropdown() {
+            const searchInput = document.getElementById('uid-search');
+            const dropdownOptions = document.getElementById('dropdown-options');
+            const hiddenUidInput = document.getElementById('uid');
+            const usernameInput = document.getElementById('username');
+
+            // Show dropdown when input is focused
+            searchInput.addEventListener('focus', function() {
+                displayOptions(allUsers);
+                dropdownOptions.classList.remove('hidden');
+            });
+
+            // Filter options as user types
+            searchInput.addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase().trim();
+                
+                if (searchTerm === '') {
+                    displayOptions(allUsers);
+                } else {
+                    const filtered = allUsers.filter(user => 
+                        user.uid.toLowerCase().includes(searchTerm) || 
+                        user.name.toLowerCase().includes(searchTerm) ||
+                        (user.email && user.email.toLowerCase().includes(searchTerm))
+                    );
+                    displayOptions(filtered);
+                }
+                
+                // Clear selection if user changes the search
+                if (selectedUser && this.value !== `${selectedUser.uid} - ${selectedUser.name}`) {
+                    selectedUser = null;
+                    hiddenUidInput.value = '';
+                    usernameInput.value = '';
+                }
+            });
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!searchInput.contains(e.target) && !dropdownOptions.contains(e.target)) {
+                    dropdownOptions.classList.add('hidden');
+                }
+            });
+
+            // Handle keyboard navigation
+            searchInput.addEventListener('keydown', function(e) {
+                const options = dropdownOptions.querySelectorAll('.dropdown-option');
+                const currentSelected = dropdownOptions.querySelector('.dropdown-option.selected');
+                let index = Array.from(options).indexOf(currentSelected);
+
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (index < options.length - 1) {
+                        if (currentSelected) currentSelected.classList.remove('selected');
+                        options[index + 1].classList.add('selected');
+                        options[index + 1].scrollIntoView({ block: 'nearest' });
+                    }
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (index > 0) {
+                        if (currentSelected) currentSelected.classList.remove('selected');
+                        options[index - 1].classList.add('selected');
+                        options[index - 1].scrollIntoView({ block: 'nearest' });
+                    }
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (currentSelected) {
+                        currentSelected.click();
+                    }
+                } else if (e.key === 'Escape') {
+                    dropdownOptions.classList.add('hidden');
+                }
+            });
+        }
+
+        // Display filtered options in dropdown
+        function displayOptions(users) {
+            const dropdownOptions = document.getElementById('dropdown-options');
+            dropdownOptions.innerHTML = '';
+
+            if (users.length === 0) {
+                dropdownOptions.innerHTML = '<div class="no-results">No matching patients found</div>';
+                return;
+            }
+
+            users.forEach((user, index) => {
+                const option = document.createElement('div');
+                option.classList.add('dropdown-option');
+                option.innerHTML = `
+                    <div class="font-medium text-zinc-100">${user.uid} - ${user.name}</div>
+                    ${user.email ? `<div class="text-xs text-zinc-400 mt-1">${user.email}</div>` : ''}
+                `;
+                option.dataset.uid = user.uid;
+                option.dataset.name = user.name;
+                option.dataset.email = user.email || '';
+
+                // Mark first option as selected by default
+                if (index === 0) {
+                    option.classList.add('selected');
+                }
+
+                option.addEventListener('click', function() {
+                    selectUser(user);
+                });
+
+                // Highlight on hover
+                option.addEventListener('mouseenter', function() {
+                    dropdownOptions.querySelectorAll('.dropdown-option').forEach(opt => {
+                        opt.classList.remove('selected');
+                    });
+                    this.classList.add('selected');
+                });
+
+                dropdownOptions.appendChild(option);
+            });
+        }
+
+        // Select a user from dropdown
+        function selectUser(user) {
+            selectedUser = user;
+            const searchInput = document.getElementById('uid-search');
+            const hiddenUidInput = document.getElementById('uid');
+            const usernameInput = document.getElementById('username');
+            const dropdownOptions = document.getElementById('dropdown-options');
+
+            // Update inputs
+            searchInput.value = `${user.uid} - ${user.name}`;
+            hiddenUidInput.value = user.uid;
+            usernameInput.value = user.name;
+
+            // Hide dropdown
+            dropdownOptions.classList.add('hidden');
+        }
+
+        // Generate invoice number on page load
+        async function generateInvoiceNumber() {
+            try {
+                const response = await fetch('/api/generate_invoice_number/');
+                const data = await response.json();
+                document.getElementById('invoiceNum').value = data.invoice_number;
+            } catch (error) {
+                console.error('Error generating invoice number:', error);
+                showError('Failed to generate invoice number');
+            }
+        }
+
+        // Get current date in YYYY-MM-DD format
+        function getCurrentDate() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        // Show success message
+        function showSuccess(message) {
+            const messageContainer = document.getElementById('messageContainer');
+            const successMessage = document.getElementById('successMessage');
+            const errorMessage = document.getElementById('errorMessage');
+            
+            messageContainer.classList.remove('hidden');
+            successMessage.classList.remove('hidden');
+            errorMessage.classList.add('hidden');
+        }
+
+        // Show error message
+        function showError(message) {
+            const messageContainer = document.getElementById('messageContainer');
+            const successMessage = document.getElementById('successMessage');
+            const errorMessage = document.getElementById('errorMessage');
+            const errorMessageText = document.getElementById('errorMessageText');
+            
+            messageContainer.classList.remove('hidden');
+            errorMessage.classList.remove('hidden');
+            successMessage.classList.add('hidden');
+            errorMessageText.textContent = message;
+        }
+
+        // Form submission
+        document.getElementById('recordForm').addEventListener('submit', async function(e) {
             e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            const submitBtnText = document.getElementById('submitBtnText');
+            const submitBtnLoader = document.getElementById('submitBtnLoader');
+            
+            // Disable button and show loader
+            submitBtn.disabled = true;
+            submitBtnText.classList.add('hidden');
+            submitBtnLoader.classList.remove('hidden');
+            
             const formData = {
                 uid: document.getElementById('uid').value,
                 username: document.getElementById('username').value,
                 invoiceNum: document.getElementById('invoiceNum').value,
-                date: document.getElementById('date').value,
+                date: getCurrentDate(), // Use current date
                 amount: document.getElementById('amount').value
             };
-            const messageContainer = document.getElementById('messageContainer');
-            const successMessage = document.getElementById('successMessage');
-            const errorMessage = document.getElementById('errorMessage');
-            messageContainer.classList.remove('hidden');
 
-            // API call using fetch GET
-            const params = new URLSearchParams(formData).toString();
-            fetch(`/api/add_new_data/?${params}`, {
-                method: 'GET'
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log(data);
+            try {
+                const params = new URLSearchParams(formData).toString();
+                const response = await fetch(`/api/add_new_data/?${params}`, {
+                    method: 'GET'
+                });
+                
+                const data = await response.json();
+                
                 if (data.status) {
-                    // On success, show success message
-                    successMessage.classList.remove('hidden');
-                    errorMessage.classList.add('hidden');
+                    showSuccess('Record created successfully!');
+                    
+                    // Reset form after 2 seconds and reload data
                     setTimeout(() => {
                         this.reset();
-                        messageContainer.classList.add('hidden');
-                        successMessage.classList.add('hidden');
-                    }, 3000);
+                        selectedUser = null;
+                        document.getElementById('messageContainer').classList.add('hidden');
+                        generateInvoiceNumber(); // Generate new invoice number
+                        
+                        // Re-enable button
+                        submitBtn.disabled = false;
+                        submitBtnText.classList.remove('hidden');
+                        submitBtnLoader.classList.add('hidden');
+                    }, 2000);
                 } else {
-                    // On failure, show error message
-                    errorMessage.classList.remove('hidden');
-                    successMessage.classList.add('hidden');
+                    showError(data.error || 'Error creating record. Please try again.');
+                    
+                    // Re-enable button
+                    submitBtn.disabled = false;
+                    submitBtnText.classList.remove('hidden');
+                    submitBtnLoader.classList.add('hidden');
                 }
-            })
-            .catch(error => {
-                // On error, show error message
-                errorMessage.classList.remove('hidden');
-                successMessage.classList.add('hidden');
-            });
+            } catch (error) {
+                console.error('Error:', error);
+                showError('Network error. Please try again.');
+                
+                // Re-enable button
+                submitBtn.disabled = false;
+                submitBtnText.classList.remove('hidden');
+                submitBtnLoader.classList.add('hidden');
+            }
+        });
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadUIDs();
+            generateInvoiceNumber();
         });
     </script>
 </body>

@@ -11,12 +11,33 @@
 		/* small helper for the sliding forms */
 		.form-slider { transition: transform 300ms cubic-bezier(.2,.9,.2,1); }
 		.toggle-btn-active { background: rgba(255,255,255,0.06); }
+		
+		/* Gradient card styling */
+		.kpi-card {
+			background: linear-gradient(135deg, #18181b 0%, #27272a 100%);
+			border: 1px solid #3f3f46;
+		}
+		
+		/* Fade-in animation */
+		@keyframes fadeIn {
+			from {
+				opacity: 0;
+				transform: translateY(10px);
+			}
+			to {
+				opacity: 1;
+				transform: translateY(0);
+			}
+		}
+		.fade-in {
+			animation: fadeIn 0.5s ease-out;
+		}
 	</style>
 </head>
 <body class="bg-zinc-900 min-h-screen text-zinc-100 flex items-center justify-center px-4">
 
 	<div class="max-w-4xl w-full grid grid-cols-1 lg:grid-cols-1 gap-8 items-center">
-		<div class="bg-zinc-800 rounded-2xl p-6 sm:p-10 border border-zinc-700 shadow-2xl">
+		<div class="kpi-card fade-in rounded-2xl p-6 sm:p-10 shadow-2xl">
 			<div class="flex items-center justify-between mb-6">
 				<div>
 					<h2 class="text-2xl font-semibold">Sign in</h2>
@@ -30,9 +51,9 @@
 			</div>
 
 			<!-- Toggle -->
-			<div class="flex bg-zinc-900/30 rounded-lg p-1 border border-zinc-700 mb-6 w-full max-w-md">
-				<button id="btn-staff" class="toggle-btn flex-1 text-sm py-2 rounded-lg text-zinc-100 font-medium text-center">Hospital Staff</button>
-				<button id="btn-patient" class="toggle-btn flex-1 text-sm py-2 rounded-lg text-zinc-400 font-medium text-center">Patient</button>
+			<div class="flex bg-zinc-900/50 rounded-lg p-1 border border-zinc-600 mb-6 w-full max-w-md shadow-md">
+				<button id="btn-staff" class="toggle-btn flex-1 text-sm py-2 rounded-lg text-zinc-100 font-medium text-center transition-all duration-200">Hospital Staff</button>
+				<button id="btn-patient" class="toggle-btn flex-1 text-sm py-2 rounded-lg text-zinc-400 font-medium text-center transition-all duration-200">Patient</button>
 			</div>
 
 			<!-- Forms container -->
@@ -44,14 +65,14 @@
 						<input type="hidden" name="user_type" value="S">
 						<div class="space-y-4">
 							<label class="block">
-								<span class="text-sm text-zinc-400">Hospital Email</span>
-								<input name="username" type="email" required class="mt-1 block w-full rounded-md bg-zinc-900/60 border border-zinc-700 text-zinc-100 placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-zinc-600" placeholder="staff@hospital.org">
+								<span class="text-sm text-zinc-400 font-medium">Hospital Email</span>
+								<input name="username" type="email" required class="mt-1 block w-full rounded-md bg-zinc-900/60 border border-zinc-600 text-zinc-100 placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all duration-200" placeholder="staff@hospital.org">
 							</label>
 
 							<label class="block">
-								<span class="text-sm text-zinc-400">Password</span>
+								<span class="text-sm text-zinc-400 font-medium">Password</span>
 								<div class="relative">
-									<input id="staff-password" name="password" type="password" required class="mt-1 block w-full rounded-md bg-zinc-900/60 border border-zinc-700 text-zinc-100 placeholder-zinc-500 px-3 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-zinc-600" placeholder="••••••••">
+									<input id="staff-password" name="password" type="password" required class="mt-1 block w-full rounded-md bg-zinc-900/60 border border-zinc-600 text-zinc-100 placeholder-zinc-500 px-3 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all duration-200" placeholder="••••••••">
 									<button type="button" aria-label="Toggle password visibility" data-target="staff-password" class="absolute inset-y-0 right-0 pr-3 flex items-center text-zinc-400 hover:text-zinc-100">
 										<!-- Eye (visible) and Eye-off (hidden) SVGs; we'll toggle via JS -->
 										<svg id="staff-eye-open" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -75,7 +96,7 @@
 							</div>
 
 							<div>
-								<button type="submit" class="w-full px-4 py-3 bg-zinc-200 text-zinc-900 rounded-lg font-medium hover:bg-zinc-100 transition">Sign in as Staff</button>
+								<button type="submit" class="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-all duration-200 shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 focus:ring-offset-zinc-900">Sign in as Staff</button>
 							</div>
 						</div>
 					</form>
@@ -86,14 +107,14 @@
 						<input type="hidden" name="user_type" value="P">
 						<div class="space-y-4">
 							<label class="block">
-								<span class="text-sm text-zinc-400">Patient ID or Email</span>
-								<input name="email" type="text" required class="mt-1 block w-full rounded-md bg-zinc-900/60 border border-zinc-700 text-zinc-100 placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-zinc-600" placeholder="Patient ID or email">
+								<span class="text-sm text-zinc-400 font-medium">Patient ID or Email</span>
+								<input name="email" type="text" required class="mt-1 block w-full rounded-md bg-zinc-900/60 border border-zinc-600 text-zinc-100 placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all duration-200" placeholder="Patient ID or email">
 							</label>
 
 							<label class="block">
-								<span class="text-sm text-zinc-400">Password</span>
+								<span class="text-sm text-zinc-400 font-medium">Password</span>
 								<div class="relative">
-									<input id="patient-password" name="password" type="password" required class="mt-1 block w-full rounded-md bg-zinc-900/60 border border-zinc-700 text-zinc-100 placeholder-zinc-500 px-3 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-zinc-600" placeholder="••••••">
+									<input id="patient-password" name="password" type="password" required class="mt-1 block w-full rounded-md bg-zinc-900/60 border border-zinc-600 text-zinc-100 placeholder-zinc-500 px-3 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all duration-200" placeholder="••••••••">
 									<button type="button" aria-label="Toggle password visibility" data-target="patient-password" class="absolute inset-y-0 right-0 pr-3 flex items-center text-zinc-400 hover:text-zinc-100">
 										<svg id="patient-eye-open" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
 											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -108,7 +129,7 @@
 							</label>
 
 							<div>
-								<button type="submit" class="w-full px-4 py-3 bg-zinc-200 text-zinc-900 rounded-lg font-medium hover:bg-zinc-100 transition">Sign in as Patient</button>
+								<button type="submit" class="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-all duration-200 shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 focus:ring-offset-zinc-900">Sign in as Patient</button>
 							</div>
 						</div>
 					</form>
@@ -124,15 +145,15 @@
 
 	<!-- Modal markup -->
 	<div id="passkey-modal-backdrop" class="hidden fixed inset-0 bg-black/50 z-50 items-center justify-center">
-		<div id="passkey-modal" class="bg-zinc-800 text-zinc-100 rounded-lg shadow-xl w-full max-w-md mx-auto p-6">
+		<div id="passkey-modal" class="kpi-card text-zinc-100 rounded-lg shadow-xl w-full max-w-md mx-auto p-6">
 			<div class="flex justify-between items-start">
 				<h3 class="text-lg font-semibold">Login with Auth Key</h3>
 				<button id="passkey-modal-close" aria-label="Close" class="text-zinc-300 hover:text-zinc-100">✕</button>
 			</div>
 			<p id="passkey-modal-body" class="mt-4 text-sm text-zinc-300">Auto Sign in using your auth key.</p>
 			<div class="mt-6 flex gap-3">
-				<button id="passkey-modal-login" class="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded" onclick="auth_key_login()">Login with Key</button>
-				<button id="passkey-modal-cancel" class="flex-1 px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded">Close</button>
+				<button id="passkey-modal-login" class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 focus:ring-offset-zinc-900" onclick="auth_key_login()">Login with Key</button>
+				<button id="passkey-modal-cancel" class="flex-1 px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 border border-zinc-600 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-600 focus:ring-offset-zinc-900">Close</button>
 			</div>
 		</div>
 	</div>
@@ -156,14 +177,14 @@
 
 	{% if error %}
 	<div id="error_popup" class="fixed inset-0 bg-black/50 z-50 items-center justify-center top-0 left-0 flex">
-		<div id="error_modal" class="bg-zinc-800 text-zinc-100 rounded-lg shadow-xl w-full max-w-md mx-auto p-6">
+		<div id="error_modal" class="kpi-card text-zinc-100 rounded-lg shadow-xl w-full max-w-md mx-auto p-6">
 			<div class="flex justify-between items-start">
 				<h3 class="text-lg font-semibold">Login Failed!</h3>
 				<button id="error-modal-close" aria-label="Close" class="text-zinc-300 hover:text-zinc-100" onclick="document.getElementById('error_popup').classList.add('hidden')">✕</button>
 			</div>
 			<p id="error-modal-body" class="mt-4 text-sm text-zinc-300">{{error_msg}}</p>
 			<div class="mt-6 flex gap-3">				
-				<button id="error-modal-cancel" class="flex-1 px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded" onclick="document.getElementById('error_popup').classList.add('hidden')">Close</button>
+				<button id="error-modal-cancel" class="flex-1 px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 border border-zinc-600 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-600 focus:ring-offset-zinc-900" onclick="document.getElementById('error_popup').classList.add('hidden')">Close</button>
 			</div>
 		</div>
 	</div>
@@ -183,7 +204,7 @@
 				btnPatient.classList.remove('text-zinc-100','toggle-btn-active');
 				btnPatient.classList.add('text-zinc-400');
 			} else {
-				forms.style.transform = 'translateX(-52%)';
+				forms.style.transform = 'translateX(-51.5%)';
 				btnPatient.classList.add('text-zinc-100','toggle-btn-active');
 				btnPatient.classList.remove('text-zinc-400');
 				btnStaff.classList.remove('text-zinc-100','toggle-btn-active');
