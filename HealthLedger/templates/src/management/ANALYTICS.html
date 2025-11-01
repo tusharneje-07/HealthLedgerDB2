@@ -40,6 +40,21 @@
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
+        .typewriter-cursor {
+            color: #3b82f6;
+            animation: blink 0.7s infinite;
+            margin-left: 2px;
+            display: inline-block;
+            vertical-align: baseline;
+            line-height: inherit;
+        }
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+        .typewriter-content-wrapper {
+            display: inline;
+        }
     </style>
 </head>
 <body class="bg-zinc-900 text-zinc-100">
@@ -675,6 +690,104 @@
             }
         }
 
+        // Typewriter animation function
+        function typewriterEffect(element, htmlContent, speed = 100) {
+            return new Promise((resolve) => {
+                // Clear the target element
+                element.innerHTML = '';
+                
+                // Create a wrapper to hold content and cursor inline
+                const contentWrapper = document.createElement('span');
+                contentWrapper.className = 'typewriter-content-wrapper';
+                contentWrapper.style.display = 'inline';
+                
+                // Create cursor element
+                const cursor = document.createElement('span');
+                cursor.className = 'typewriter-cursor';
+                cursor.textContent = '▊';
+                cursor.style.display = 'inline-block';
+                
+                element.appendChild(contentWrapper);
+                element.appendChild(cursor);
+                
+                let currentIndex = 0;
+                const fullText = htmlContent;
+                let intervalId;
+                let isComplete = false;
+                
+                // Function to complete animation instantly
+                const completeAnimation = () => {
+                    if (!isComplete) {
+                        if (intervalId) clearInterval(intervalId);
+                        cursor.remove();
+                        element.innerHTML = fullText;
+                        isComplete = true;
+                        resolve();
+                    }
+                };
+                
+                // Use setInterval for consistent behavior
+                intervalId = setInterval(() => {
+                    if (currentIndex < fullText.length) {
+                        // Add characters progressively to the wrapper
+                        contentWrapper.innerHTML = fullText.substring(0, currentIndex + 1);
+                        currentIndex++;
+                    } else {
+                        completeAnimation();
+                    }
+                }, speed);
+                
+                // Handle visibility change - complete animation if page becomes visible and animation is slow
+                const handleVisibilityChange = () => {
+                    if (!document.hidden && !isComplete && currentIndex > 0 && currentIndex < fullText.length) {
+                        // Page became visible during animation - speed it up or complete it
+                        completeAnimation();
+                    }
+                };
+                
+                document.addEventListener('visibilitychange', handleVisibilityChange);
+                
+                // Cleanup listener when complete
+                element._typewriterCleanup = () => {
+                    if (intervalId) clearInterval(intervalId);
+                    document.removeEventListener('visibilitychange', handleVisibilityChange);
+                };
+            });
+        }
+
+        // Typewriter for highlights with delay
+        async function typewriterHighlights(highlights, speed = 100) {
+            const highlightsList = document.getElementById('highlights-list');
+            const highlightsEl = document.getElementById('insights-highlights');
+            
+            highlightsList.innerHTML = '';
+            highlightsEl.classList.remove('hidden');
+            
+            for (let i = 0; i < highlights.length; i++) {
+                const li = document.createElement('li');
+                li.className = 'flex items-start space-x-2 opacity-0';
+                li.innerHTML = `
+                    <svg class="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                    <span class="text-zinc-300"></span>
+                `;
+                highlightsList.appendChild(li);
+                
+                // Fade in the list item
+                await new Promise(resolve => setTimeout(resolve, 100));
+                li.style.transition = 'opacity 0.3s ease-in';
+                li.style.opacity = '1';
+                
+                // Type the highlight text
+                const span = li.querySelector('span');
+                await typewriterEffect(span, highlights[i], speed);
+                
+                // Small delay before next item
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
+        }
+
         // Load AI Insights
         async function loadAIInsights() {
             const loadingEl = document.getElementById('insights-loading');
@@ -691,6 +804,10 @@
 
             loadingEl.classList.remove('hidden');
             contentEl.classList.add('opacity-50');
+            
+            // Hide highlights and copy button initially
+            highlightsEl.classList.add('hidden');
+            copyBtn.classList.add('hidden');
 
             try {
                 const response = await fetch('/api/ai_insights/', {
@@ -701,32 +818,25 @@
                 
                 const data = await response.json();
 
-                // Update insights text with proper markdown rendering
+                loadingEl.classList.add('hidden');
+                contentEl.classList.remove('opacity-50');
+
+                // Update insights text with typewriter animation
                 if (data.insights_text) {
-                    textEl.innerHTML = markdownToHTML(data.insights_text);
+                    const htmlContent = markdownToHTML(data.insights_text);
+                    await typewriterEffect(textEl, htmlContent, 1);
                     copyBtn.classList.remove('hidden');
                 }
 
-                // Update highlights
+                // Update highlights with typewriter animation
                 if (data.highlights && data.highlights.length > 0) {
-                    highlightsList.innerHTML = '';
-                    data.highlights.forEach(highlight => {
-                        const li = document.createElement('li');
-                        li.className = 'flex items-start space-x-2';
-                        li.innerHTML = `
-                            <svg class="w-5 h-5 text-blue-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                            </svg>
-                            <span class="text-zinc-300">${highlight}</span>
-                        `;
-                        highlightsList.appendChild(li);
-                    });
-                    highlightsEl.classList.remove('hidden');
+                    await typewriterHighlights(data.highlights, 1);
                 }
 
-                // Update confidence
+                // Update confidence with animation
                 if (data.confidence_score !== undefined) {
                     const confidence = Math.round(data.confidence_score * 100);
+                    confidenceBar.style.transition = 'width 1s ease-out';
                     confidenceBar.style.width = confidence + '%';
                     confidenceText.textContent = confidence + '%';
                     //confidenceEl.classList.remove('hidden');
@@ -740,10 +850,9 @@
 
             } catch (error) {
                 console.error('Error loading AI insights:', error);
-                textEl.innerHTML = `<p class="text-red-400">Failed to load AI insights. Please try again later.</p>`;
-            } finally {
                 loadingEl.classList.add('hidden');
                 contentEl.classList.remove('opacity-50');
+                textEl.innerHTML = `<p class="text-red-400">Failed to load AI insights. Please try again later.</p>`;
             }
         }
 
