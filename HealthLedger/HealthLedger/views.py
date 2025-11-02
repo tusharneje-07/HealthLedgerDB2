@@ -5,7 +5,6 @@ from datetime import datetime
 from collections import defaultdict
 from django.utils import timezone
 import hashlib, base64
-from django.contrib.sessions.models import Session
 import json
 import requests
 from django.views.decorators.csrf import csrf_exempt
@@ -18,8 +17,11 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.enums import TA_CENTER
+from reportlab.graphics.shapes import Drawing
+from reportlab.graphics.charts.piecharts import Pie
+from reportlab.graphics.charts.barcharts import VerticalBarChart
 
 # Load environment variables
 load_dotenv()
@@ -2175,24 +2177,6 @@ def api_generate_report(request):
 
 
 def generate_reportlab_pdf(report_data, sections, orientation):
-    """
-    Generate PDF using ReportLab (pure Python, no DLL dependencies).
-    Enhanced with charts and modern visual design.
-    Returns PDF as bytes.
-    """
-    from io import BytesIO
-    import requests
-    from reportlab.lib import colors
-    from reportlab.lib.pagesizes import A4, landscape
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import inch
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-    from reportlab.graphics.shapes import Drawing
-    from reportlab.graphics.charts.piecharts import Pie
-    from reportlab.graphics.charts.barcharts import VerticalBarChart
-    from reportlab.graphics.charts.legends import Legend
-
     buffer = BytesIO()
 
     # Set page size based on orientation
@@ -2671,234 +2655,6 @@ def generate_reportlab_pdf(report_data, sections, orientation):
 
     return pdf_bytes
     
-
-def generate_report_html(report_data, sections):
-    """
-    Generate HTML content for the PDF report.
-    Compatible with WeasyPrint - uses table layout instead of CSS grid.
-    """
-    html = f'''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>HealthLedger Analytics Report</title>
-    </head>
-    <body>
-        <h1>HealthLedger Analytics Report</h1>
-        <p style="color: #666; font-size: 12px;">Generated: {report_data['generated_at']}</p>
-        <hr>
-    '''
-    
-    # KPI Section - Using table instead of grid for WeasyPrint compatibility
-    if 'kpi-section' in sections and 'kpi' in report_data['sections']:
-        kpi = report_data['sections']['kpi']
-        html += f'''
-        <h2>Key Performance Indicators</h2>
-        <table class="kpi-table">
-            <tr>
-                <td style="width: 50%; border: 1px solid #ddd; padding: 15px;">
-                    <div class="kpi-value">₹{kpi['total_revenue']:,.2f}</div>
-                    <div class="kpi-label">Total Revenue</div>
-                </td>
-                <td style="width: 50%; border: 1px solid #ddd; padding: 15px;">
-                    <div class="kpi-value">₹{kpi['total_collected']:,.2f}</div>
-                    <div class="kpi-label">Collected Payments</div>
-                </td>
-            </tr>
-            <tr>
-                <td style="width: 50%; border: 1px solid #ddd; padding: 15px;">
-                    <div class="kpi-value">₹{kpi['outstanding']:,.2f}</div>
-                    <div class="kpi-label">Outstanding Balance</div>
-                </td>
-                <td style="width: 50%; border: 1px solid #ddd; padding: 15px;">
-                    <div class="kpi-value">{kpi['total_patients']}</div>
-                    <div class="kpi-label">Total Patients</div>
-                </td>
-            </tr>
-        </table>
-        '''
-    
-    # Revenue Trend Section
-    if 'revenue-trend-section' in sections and 'revenue_trend' in report_data['sections']:
-        html += '''
-        <h2>Monthly Revenue Trend</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Month</th>
-                    <th>Revenue</th>
-                </tr>
-            </thead>
-            <tbody>
-        '''
-        for item in report_data['sections']['revenue_trend']:
-            html += f'''
-                <tr>
-                    <td>{item['month']}</td>
-                    <td>₹{item['revenue']:,.2f}</td>
-                </tr>
-            '''
-        html += '''
-            </tbody>
-        </table>
-        '''
-    
-    # Payment Modes Section
-    if 'payment-modes-section' in sections and 'payment_modes' in report_data['sections']:
-        html += '''
-        <h2>Payment Mode Distribution</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Mode</th>
-                    <th>Count</th>
-                    <th>Amount</th>
-                </tr>
-            </thead>
-            <tbody>
-        '''
-        for item in report_data['sections']['payment_modes']:
-            html += f'''
-                <tr>
-                    <td>{item['mode']}</td>
-                    <td>{item['count']}</td>
-                    <td>₹{item['amount']:,.2f}</td>
-                </tr>
-            '''
-        html += '''
-            </tbody>
-        </table>
-        '''
-    
-    # Top Patients Section
-    if 'top-patients-section' in sections and 'top_patients' in report_data['sections']:
-        html += '''
-        <h2>Top 10 Paying Patients</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>UID</th>
-                    <th>Name</th>
-                    <th>Total Paid</th>
-                </tr>
-            </thead>
-            <tbody>
-        '''
-        for item in report_data['sections']['top_patients']:
-            html += f'''
-                <tr>
-                    <td>{item['uid']}</td>
-                    <td>{item['name']}</td>
-                    <td>₹{item['total_paid']:,.2f}</td>
-                </tr>
-            '''
-        html += '''
-            </tbody>
-        </table>
-        '''
-    
-    # Invoice Volume Section
-    if 'invoice-volume-section' in sections and 'invoice_volume' in report_data['sections']:
-        html += '''
-        <h2>Invoice Volume Trend</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Month</th>
-                    <th>Count</th>
-                </tr>
-            </thead>
-            <tbody>
-        '''
-        for item in report_data['sections']['invoice_volume']:
-            html += f'''
-                <tr>
-                    <td>{item['month']}</td>
-                    <td>{item['count']}</td>
-                </tr>
-            '''
-        html += '''
-            </tbody>
-        </table>
-        '''
-    
-    # Activity Logs Section
-    if 'activity-logs-section' in sections and 'activity_logs' in report_data['sections']:
-        html += '''
-        <h2>Recent System Activity</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Date/Time</th>
-                    <th>Activity</th>
-                    <th>Description</th>
-                </tr>
-            </thead>
-            <tbody>
-        '''
-        for item in report_data['sections']['activity_logs']:
-            html += f'''
-                <tr>
-                    <td>{item['log_date_time']}</td>
-                    <td>{item['log_name']}</td>
-                    <td>{item['log_desc']}</td>
-                </tr>
-            '''
-        html += '''
-            </tbody>
-        </table>
-        '''
-    
-    # Patients List Section
-    if 'patients-list-section' in sections and 'patients_list' in report_data['sections']:
-        html += '''
-        <h2>All Patients List</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>UID</th>
-                    <th>Name</th>
-                    <th>Invoice</th>
-                    <th>Date</th>
-                    <th>Amount</th>
-                    <th>Paid</th>
-                    <th>Remaining</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-        '''
-        for item in report_data['sections']['patients_list']:
-            status_class = 'status-paid' if item['remark'] == 'Paid' else 'status-pending'
-            html += f'''
-                <tr>
-                    <td>{item['uid']}</td>
-                    <td>{item['username']}</td>
-                    <td>{item['invoice_num']}</td>
-                    <td>{item['date']}</td>
-                    <td>₹{item['amount']:,.2f}</td>
-                    <td>₹{item['paid_amount']:,.2f}</td>
-                    <td>₹{item['remaining_amount']:,.2f}</td>
-                    <td class="{status_class}">{item['remark']}</td>
-                </tr>
-            '''
-        html += '''
-            </tbody>
-        </table>
-        '''
-    
-    html += '''
-        <hr>
-        <p class="footer">
-            HealthLedger - Hospital Invoice Management System<br>
-            This report is confidential and intended for authorized personnel only.
-        </p>
-    </body>
-    </html>
-    '''
-    
-    return html
 
 # ===================================================== ANALYTICS VIEWS
 

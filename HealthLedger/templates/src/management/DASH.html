@@ -23,9 +23,74 @@
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
+
+        /* Page Loading Animation */
+        #page-loader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 99999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #page-loader.show {
+            display: flex;
+        }
+
+        .loader-content {
+            text-align: center;
+        }
+
+        .spinner-ring {
+            display: inline-block;
+            width: 64px;
+            height: 64px;
+            margin-bottom: 16px;
+        }
+
+        .spinner-ring:after {
+            content: " ";
+            display: block;
+            width: 52px;
+            height: 52px;
+            margin: 6px;
+            border-radius: 50%;
+            border: 6px solid #3b82f6;
+            border-color: #3b82f6 transparent #3b82f6 transparent;
+            animation: spinner-ring 1.2s linear infinite;
+        }
+
+        @keyframes spinner-ring {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .loader-text {
+            color: #e4e4e7;
+            font-size: 16px;
+            font-weight: 500;
+        }
     </style>
 </head>
 <body class="bg-zinc-900 min-h-screen text-zinc-100">
+    
+    <!-- Page Loading Overlay -->
+    <div id="page-loader">
+        <div class="loader-content">
+            <div class="spinner-ring"></div>
+            <div class="loader-text">Loading...</div>
+        </div>
+    </div>
     
     <!-- Navbar -->
     <nav class="bg-zinc-800 border-b border-zinc-700 sticky top-0 z-50">
@@ -33,30 +98,30 @@
             <div class="flex justify-between items-center h-16">
                 <!-- Logo -->
                 <div class="flex items-center">
-                    <div class="text-xl font-semibold text-zinc-100">
-                        HealthLedger
-                    </div>
+                    <img src="{% static 'images/logo.png' %}" alt="HealthLedger" style="width: 13rem;">
                 </div>
                 
-                <!-- Navigation Links -->
-                <div class="hidden md:flex space-x-6">
-                    <a class="text-zinc-100 hover:text-zinc-300 transition-colors duration-200 font-medium cursor-pointer">Dashboard</a>
-                    <a class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/analytics'" style="cursor: pointer;">Analytics</a>
-                    <a class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/view_all'" style="cursor: pointer;">Records</a>
-                    <a href="#" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/logout'">SleepOut</a>
+                <div class="flex flex-row items-center space-x-6 w-full justify-end">
+                    <!-- Navigation Links -->
+                    <div class="hidden md:flex space-x-6">
+                        <a class="text-zinc-100 hover:text-zinc-300 transition-colors duration-200 font-medium cursor-pointer">Dashboard</a>
+                        <a class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/analytics'" style="cursor: pointer;">Analytics</a>
+                        <a class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/view_all'" style="cursor: pointer;">Records</a>
+                        <a href="#" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/logout'">SleepOut</a>
 
-                </div>
-                
-                <!-- User Menu -->
-                <div class="flex items-center space-x-4">
-                    <button class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
-                        </svg>
-                    </button>
-                    <div class="flex items-center space-x-2">
-                        <div class="w-8 h-8 bg-zinc-700 rounded-full flex items-center justify-center text-sm font-medium">
-                            <img width="94" height="94" src="https://img.icons8.com/3d-fluency/94/settings-2.png" alt="settings-2"/>
+                    </div>
+                    
+                    <!-- User Menu -->
+                    <div class="flex items-center space-x-4">
+                        <button class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                            </svg>
+                        </button>
+                        <div class="flex items-center space-x-2">
+                            <div class="w-8 h-8 bg-zinc-700 rounded-full flex items-center justify-center text-sm font-medium">
+                                <img width="94" height="94" src="https://img.icons8.com/3d-fluency/94/settings-2.png" alt="settings-2"/>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -253,92 +318,124 @@
         </div>
 
     </div>
-    <script>
-
-        function updateDashboard() {
-            // TODO: Fetch new data and update the dashboard elements
-             getdata();
-             fetchActivities();
-        }
-
-        setInterval(updateDashboard, 2000);
-
-        const activityContainer = document.querySelector('.space-y-4');
-
-        // Fetch recent activities
-        async function fetchActivities() {
-            try {
-                const response = await fetch('/api/recent-activity/'); // Django API endpoint
-                const data = await response.json();
-
-                // Clear existing activities
-                activityContainer.innerHTML = '';
-
-                // Loop through activities and create HTML
-                data.activities.forEach((activity, index) => {
-                    const colorClasses = ['bg-green-400','bg-blue-400','bg-yellow-400','bg-purple-400','bg-red-400'];
-                    const activityHTML = `
-                        <div class="flex items-start space-x-4">
-                            <div class="w-2 h-2 ${colorClasses[index % colorClasses.length]} rounded-full mt-2"></div>
-                            <div class="flex-1">
-                                <p class="text-sm text-zinc-100">${activity.log_name}</p>
-                                <p class="text-xs text-zinc-400 mt-1">${activity.log_desc}</p>
-                                <p class="text-xs text-zinc-500 mt-1">${formatTime(activity.log_date_time)}</p>
-                            </div>
-                        </div>
-                    `;
-                    activityContainer.innerHTML += activityHTML;
-                });
-            } catch (error) {
-                console.error('Error fetching activities:', error);
-            }
-        }
-
-        // Format timestamp to human-readable like "2 hours ago"
-        function formatTime(datetimeStr) {
-            const activityTime = new Date(datetimeStr);
-            const now = new Date();
-            const diff = Math.floor((now - activityTime) / 1000); // seconds
-
-            if(diff < 60) return `${diff} seconds ago`;
-            if(diff < 3600) return `${Math.floor(diff/60)} minutes ago`;
-            if(diff < 86400) return `${Math.floor(diff/3600)} hours ago`;
-            return `${Math.floor(diff/86400)} days ago`;
-        }
-
-
-        async function getdata() {
-            try {
-                const response = await fetch('/api/get_stats/');
-                const data = await response.json();
-                document.getElementById('total_records').textContent = data.total_records;
-                document.getElementById('total_revenue').textContent = `₹${data.total_revenue.toFixed(2)}`;
-                document.getElementById('total_pending_amount').textContent = `₹${data.total_pending_amount.toFixed(2)}`;
-                document.getElementById('total_paid_customers').textContent = data.total_paid_customers;
-                document.getElementById('completed').textContent = data.total_paid_customers;
-                document.getElementById('pending').textContent = parseInt(data.total_records) - parseInt(data.total_paid_customers);
-                const per = (parseInt(data.total_paid_customers) / parseInt(data.total_records) * 100).toFixed(2)
-                document.getElementById("completion_rate").textContent = `${per}% completion rate `;
-                if(per<30){
-                    document.getElementById("completion_rate").classList.remove("text-green-400");
-                    document.getElementById("completion_rate").classList.add("text-red-400");
-                }
-                else if(per<70){
-                    document.getElementById("completion_rate").classList.remove("text-green-400");
-                    document.getElementById("completion_rate").classList.add("text-yellow-400");
-                }
-                else{
-                    document.getElementById("completion_rate").classList.remove("text-yellow-400");
-                    document.getElementById("completion_rate").classList.add("text-green-400");
-                }
-            } catch (error) {
-                console.error('Error fetching activities:', error);
-            }
-        }
-
-        fetchActivities();
-        getdata();
-    </script>
-
 </body>
+<script>
+    function updateDashboard() {
+        // TODO: Fetch new data and update the dashboard elements
+            getdata();
+            fetchActivities();
+    }
+
+    setInterval(updateDashboard, 2000);
+
+    const activityContainer = document.querySelector('.space-y-4');
+
+    // Fetch recent activities
+    async function fetchActivities() {
+        try {
+            const response = await fetch('/api/recent-activity/'); // Django API endpoint
+            const data = await response.json();
+
+            // Clear existing activities
+            activityContainer.innerHTML = '';
+
+            // Loop through activities and create HTML
+            data.activities.forEach((activity, index) => {
+                const colorClasses = ['bg-green-400','bg-blue-400','bg-yellow-400','bg-purple-400','bg-red-400'];
+                const activityHTML = `
+                    <div class="flex items-start space-x-4">
+                        <div class="w-2 h-2 ${colorClasses[index % colorClasses.length]} rounded-full mt-2"></div>
+                        <div class="flex-1">
+                            <p class="text-sm text-zinc-100">${activity.log_name}</p>
+                            <p class="text-xs text-zinc-400 mt-1">${activity.log_desc}</p>
+                            <p class="text-xs text-zinc-500 mt-1">${formatTime(activity.log_date_time)}</p>
+                        </div>
+                    </div>
+                `;
+                activityContainer.innerHTML += activityHTML;
+            });
+        } catch (error) {
+            console.error('Error fetching activities:', error);
+        }
+    }
+
+    // Format timestamp to human-readable like "2 hours ago"
+    function formatTime(datetimeStr) {
+        const activityTime = new Date(datetimeStr);
+        const now = new Date();
+        const diff = Math.floor((now - activityTime) / 1000); // seconds
+
+        if(diff < 60) return `${diff} seconds ago`;
+        if(diff < 3600) return `${Math.floor(diff/60)} minutes ago`;
+        if(diff < 86400) return `${Math.floor(diff/3600)} hours ago`;
+        return `${Math.floor(diff/86400)} days ago`;
+    }
+
+
+    async function getdata() {
+        try {
+            const response = await fetch('/api/get_stats/');
+            const data = await response.json();
+            document.getElementById('total_records').textContent = data.total_records;
+            document.getElementById('total_revenue').textContent = `₹${data.total_revenue.toFixed(2)}`;
+            document.getElementById('total_pending_amount').textContent = `₹${data.total_pending_amount.toFixed(2)}`;
+            document.getElementById('total_paid_customers').textContent = data.total_paid_customers;
+            document.getElementById('completed').textContent = data.total_paid_customers;
+            document.getElementById('pending').textContent = parseInt(data.total_records) - parseInt(data.total_paid_customers);
+            const per = (parseInt(data.total_paid_customers) / parseInt(data.total_records) * 100).toFixed(2)
+            document.getElementById("completion_rate").textContent = `${per}% completion rate `;
+            if(per<30){
+                document.getElementById("completion_rate").classList.remove("text-green-400");
+                document.getElementById("completion_rate").classList.add("text-red-400");
+            }
+            else if(per<70){
+                document.getElementById("completion_rate").classList.remove("text-green-400");
+                document.getElementById("completion_rate").classList.add("text-yellow-400");
+            }
+            else{
+                document.getElementById("completion_rate").classList.remove("text-yellow-400");
+                document.getElementById("completion_rate").classList.add("text-green-400");
+            }
+        } catch (error) {
+            console.error('Error fetching activities:', error);
+        }
+    }
+
+    fetchActivities();
+    getdata();
+
+    // Show loader on page navigation
+    document.addEventListener('DOMContentLoaded', function() {
+        // Intercept all clicks on links and navigation elements
+        document.addEventListener('click', function(e) {
+            const link = e.target.closest('a');
+            const clickable = e.target.closest('[onclick]');
+            
+            if (link && link.href && !link.target && !link.hasAttribute('download')) {
+                const url = new URL(link.href);
+                // Only show loader for same-origin navigation
+                if (url.origin === window.location.origin && !link.href.includes('#')) {
+                    e.preventDefault();
+                    document.getElementById('page-loader').classList.add('show');
+                    setTimeout(function() {
+                        window.location.href = link.href;
+                    }, 100);
+                }
+            } else if (clickable && clickable.getAttribute('onclick')) {
+                const onclickAttr = clickable.getAttribute('onclick');
+                if (onclickAttr.includes('window.location')) {
+                    document.getElementById('page-loader').classList.add('show');
+                }
+            }
+        });
+
+        // Show loader on form submissions
+        const forms = document.querySelectorAll('form');
+        forms.forEach(function(form) {
+            form.addEventListener('submit', function() {
+                document.getElementById('page-loader').classList.add('show');
+            });
+        });
+    });
+</script>
 </html>
