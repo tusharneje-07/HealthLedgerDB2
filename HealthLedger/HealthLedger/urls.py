@@ -50,6 +50,12 @@ urlpatterns = [
     path('api/get_all_uids/', views.api_get_all_uids, name='api_get_all_uids'),
     path('api/generate_invoice_number/', views.api_generate_invoice_number, name='api_generate_invoice_number'),
     path('api/get_user_by_uid/', views.api_get_user_by_uid, name='api_get_user_by_uid'),
+    path('api/auth_stats/', views.api_auth_stats, name='api_auth_stats'),
+    # Registration
+    path('register/', views.REGISTER, name='register'),
+    path('api/generate_uid/', views.api_generate_uid, name='api_generate_uid'),
+    path('api/register_user/', views.api_register_user, name='api_register_user'),
+    path('api/registration_pdf/<str:uid>/', views.registration_pdf, name='registration_pdf'),
     path('api/invoice/<str:invoice_num>/', views.detailed_invoice_view, name='detailed_invoice'),
     path('api/records/', views.load_data, name='api_records'),
     path('api/records/count/', views.records_count, name='api_records_count'),

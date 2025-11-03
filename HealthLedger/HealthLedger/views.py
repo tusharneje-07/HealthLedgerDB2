@@ -7,6 +7,8 @@ from django.utils import timezone
 import hashlib, base64
 import json
 import requests
+import random
+import re
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 import razorpay
@@ -2734,3 +2736,305 @@ def api_get_user_by_uid(request):
     }
     
     return JsonResponse(user_data)
+
+
+def api_auth_stats(request):
+    """Return statistics about AUTHENTICATION table:
+    - total_users
+    - domain_counts (common domains and 'others')
+    """
+    try:
+        ok, res = DB2Query.runSelectQuery("SELECT EMAIL FROM AUTHENTICATION WHERE EMAIL IS NOT NULL")
+        if not ok:
+            return JsonResponse({'error': 'Failed to query authentication table'}, status=500)
+
+        total = 0
+        domain_counts = {}
+        common = ['gmail.com', 'yahoo.com', 'outlook.com', 'healthledger.com', 'email.com', 'hotmail.com']
+        others = 0
+        if res:
+            for row in res:
+                email = (row.get('EMAIL') or '').strip().lower()
+                if not email:
+                    continue
+                total += 1
+                parts = email.split('@')
+                domain = parts[1] if len(parts) > 1 else 'unknown'
+                domain_counts[domain] = domain_counts.get(domain, 0) + 1
+
+        # prepare response with common domains and others
+        resp = {'total_users': total, 'domains': {}}
+        counted = 0
+        for d in common:
+            c = domain_counts.get(d, 0)
+            resp['domains'][d] = c
+            counted += c
+
+        # remaining domains as others
+        resp['domains']['others'] = max(0, total - counted)
+
+        # include top 5 domains for reference
+        top_domains = sorted(domain_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+        resp['top_domains'] = [{ 'domain': d, 'count': c } for d,c in top_domains]
+
+        return JsonResponse(resp)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def REGISTER(request):
+    """Render the patient registration page."""
+    return render(request, 'src/management/REGISTER.html')
+
+
+def api_generate_uid(request):
+    """Generate a new unique UID. Format: U######## (8 digit numeric part)
+    This inspects existing UIDs and returns next sequence.
+    """
+    try:
+        ok, res = DB2Query.runSelectQuery("SELECT UID FROM AUTHENTICATION WHERE UID IS NOT NULL")
+        prefixes = {}
+        if ok and res:
+            for row in res:
+                uid = (row.get('UID') or '').strip()
+                m = re.match(r"^([A-Za-z]+)(\d+)$", uid)
+                if m:
+                    pfx = m.group(1).upper()
+                    num = int(m.group(2))
+                    width = len(m.group(2))
+                    if pfx not in prefixes:
+                        prefixes[pfx] = { 'max': num, 'width': width }
+                    else:
+                        if num > prefixes[pfx]['max']:
+                            prefixes[pfx]['max'] = num
+                        # keep the max width seen
+                        prefixes[pfx]['width'] = max(prefixes[pfx]['width'], width)
+
+        # Choose prefix: prefer most common prefix (by count) or fallback to 'ABC'
+        if prefixes:
+            # determine counts per prefix to pick most common
+            counts = {}
+            for row in res:
+                uid = (row.get('UID') or '').strip()
+                m = re.match(r"^([A-Za-z]+)(\d+)$", uid)
+                if m:
+                    pfx = m.group(1).upper()
+                    counts[pfx] = counts.get(pfx, 0) + 1
+            # pick prefix with highest count
+            chosen = max(counts.items(), key=lambda x: x[1])[0]
+            info = prefixes.get(chosen)
+            max_num = info['max']
+            width = info['width']
+            new_num = max_num + 1
+            new_uid = f"{chosen}{new_num:0{width}d}"
+        else:
+            # No matching pattern found; start with ABC001
+            new_uid = 'ABC001'
+
+        # ensure uniqueness (very unlikely collision) by incrementing
+        exists_ok, exists_res = DB2Query.runSelectQuery(f"SELECT UID FROM AUTHENTICATION WHERE UID = '{new_uid}' FETCH FIRST 1 ROW ONLY")
+        attempts = 0
+        while exists_ok and exists_res and attempts < 1000:
+            # increment numeric suffix
+            m = re.match(r"^([A-Za-z]+)(\d+)$", new_uid)
+            if not m:
+                new_uid = 'ABC001'
+                break
+            pfx = m.group(1)
+            num = int(m.group(2)) + 1
+            w = len(m.group(2))
+            new_uid = f"{pfx}{num:0{w}d}"
+            exists_ok, exists_res = DB2Query.runSelectQuery(f"SELECT UID FROM AUTHENTICATION WHERE UID = '{new_uid}' FETCH FIRST 1 ROW ONLY")
+            attempts += 1
+
+        return JsonResponse({'uid': new_uid})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+def api_register_user(request):
+    """Register a new patient (staff-facing API).
+
+    Expects POST with JSON or form fields: name, email
+    Generates UID and a unique 4-digit password and inserts into AUTHENTICATION
+    Returns: { success: True, uid: 'U00000001', pdf_url: '/api/registration_pdf/U00000001' }
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST allowed'}, status=405)
+
+    try:
+        try:
+            body = json.loads(request.body)
+            name = body.get('name')
+            email = body.get('email')
+        except Exception:
+            name = request.POST.get('name')
+            email = request.POST.get('email')
+
+        if not name or not email:
+            return JsonResponse({'error': 'name and email are required'}, status=400)
+
+        # sanitize
+        name_s = name.replace("'", "''")
+        email_s = email.replace("'", "''")
+
+        # Check for duplicate email first
+        check_q = f"SELECT EMAIL FROM AUTHENTICATION WHERE EMAIL = '{email_s}' FETCH FIRST 1 ROW ONLY"
+        okc, crec = DB2Query.runSelectQuery(check_q)
+        if okc and crec:
+            return JsonResponse({'error': 'Email already registered'}, status=400)
+
+        # Generate UID (try multiple times in case of race/duplicate)
+        new_uid = None
+        for attempt in range(10):
+            uid_resp = api_generate_uid(request)
+            if isinstance(uid_resp, JsonResponse):
+                data = json.loads(uid_resp.content)
+                cand = data.get('uid')
+            else:
+                cand = 'ABC001'
+
+            # verify uniqueness
+            exists_q = f"SELECT UID FROM AUTHENTICATION WHERE UID = '{cand}' FETCH FIRST 1 ROW ONLY"
+            okx, rx = DB2Query.runSelectQuery(exists_q)
+            if not okx:
+                # if query failed, continue to next attempt
+                continue
+            if not rx:
+                new_uid = cand
+                break
+            # otherwise try again (loop will continue)
+
+        if not new_uid:
+            return JsonResponse({'error': 'Unable to generate unique UID, try again'}, status=500)
+
+        # Ensure password uniqueness - 4 digit numeric
+        ok, pass_res = DB2Query.runSelectQuery("SELECT PASSWORD FROM AUTHENTICATION WHERE PASSWORD IS NOT NULL")
+        existing_passwords = set()
+        if ok and pass_res:
+            for r in pass_res:
+                p = r.get('PASSWORD')
+                if p:
+                    existing_passwords.add(str(p))
+
+        password = None
+        attempts = 0
+        while attempts < 500:
+            candidate = '{:04d}'.format(random.randint(0, 9999))
+            if candidate not in existing_passwords:
+                password = candidate
+                break
+            attempts += 1
+
+        if not password:
+            return JsonResponse({'error': 'Unable to generate unique password'}, status=500)
+
+        flag = 'P'
+        key = ''
+
+        insert_sql = (
+            "INSERT INTO AUTHENTICATION (UID, NAME, EMAIL, PASSWORD, FLAG, KEY) "
+            f"VALUES ('{new_uid}', '{name_s}', '{email_s}', '{password}', '{flag}', '{key}')"
+        )
+
+        success, msg = DB2Query.runQuery(insert_sql)
+        # If insert failed due to duplicate key (race), retry a few times
+        if not success:
+            if isinstance(msg, str) and ('SQL0803N' in msg or 'SQLCODE=-803' in msg or '23505' in msg):
+                # try to regenerate UID and insert again a few times
+                retried = False
+                for attempt in range(5):
+                    # generate another candidate
+                    uid_resp = api_generate_uid(request)
+                    if isinstance(uid_resp, JsonResponse):
+                        data = json.loads(uid_resp.content)
+                        cand = data.get('uid')
+                    else:
+                        cand = None
+                    if not cand:
+                        continue
+                    # check exists
+                    okx, rx = DB2Query.runSelectQuery(f"SELECT UID FROM AUTHENTICATION WHERE UID = '{cand}' FETCH FIRST 1 ROW ONLY")
+                    if not okx:
+                        continue
+                    if rx:
+                        continue
+                    # try insert
+                    insert_sql = (
+                        "INSERT INTO AUTHENTICATION (UID, NAME, EMAIL, PASSWORD, FLAG, KEY) "
+                        f"VALUES ('{cand}', '{name_s}', '{email_s}', '{password}', '{flag}', '{key}')"
+                    )
+                    success2, msg2 = DB2Query.runQuery(insert_sql)
+                    if success2:
+                        new_uid = cand
+                        success = True
+                        msg = msg2
+                        retried = True
+                        break
+                if not retried and not success:
+                    return JsonResponse({'error': f'Failed to insert user after retry: {msg}'}, status=500)
+            else:
+                return JsonResponse({'error': f'Failed to insert user: {msg}'}, status=500)
+
+        # Log activity
+        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        log_q = (
+            "INSERT INTO activity (log_name, log_desc, log_date_time) "
+            f"VALUES ('User Registration', 'Registered user {new_uid} ({name_s})', '{ts}')"
+        )
+        DB2Query.runQuery(log_q)
+
+        pdf_url = f"/api/registration_pdf/{new_uid}/"
+
+        return JsonResponse({'success': True, 'uid': new_uid, 'password': password, 'pdf_url': pdf_url})
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def registration_pdf(request, uid):
+    """Generate a PDF containing the registration info for printing."""
+    if not uid:
+        return JsonResponse({'error': 'UID required'}, status=400)
+
+    q = f"SELECT UID, NAME, EMAIL, PASSWORD, FLAG, KEY FROM AUTHENTICATION WHERE UID = '{uid}' FETCH FIRST 1 ROW ONLY"
+    ok, res = DB2Query.runSelectQuery(q)
+    if not ok or not res:
+        return JsonResponse({'error': 'User not found'}, status=404)
+
+    user = res[0]
+    # Build PDF using reportlab
+    buffer = BytesIO()
+    from reportlab.lib.pagesizes import A4
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    styles = getSampleStyleSheet()
+    story = []
+
+    title = Paragraph('HealthLedger - Patient Registration', styles['Title'])
+    story.append(title)
+    story.append(Spacer(1, 12))
+
+    normal = styles['Normal']
+    story.append(Paragraph(f"UID: {user.get('UID', '')}", normal))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(f"Name: {user.get('NAME', '')}", normal))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(f"Email: {user.get('EMAIL', '')}", normal))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(f"Temporary Password: {user.get('PASSWORD', '')}", normal))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(f"Flag: {user.get('FLAG', '')}", normal))
+    story.append(Spacer(1, 12))
+    story.append(Paragraph('Please change the temporary password on first login.', styles['Italic']))
+
+    doc.build(story)
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename=registration_{uid}.pdf'
+    return response

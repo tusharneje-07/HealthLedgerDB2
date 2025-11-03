@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HealthLedger | Register Patient</title>
+    {% load static %}
+    <link href="{% static 'css/output.css' %}" rel="stylesheet">
+    <style>
+        .kpi-card { background: linear-gradient(135deg, #18181b 0%, #27272a 100%); border: 1px solid #3f3f46; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px);} to { opacity: 1; transform: translateY(0);} }
+        .fade-in { animation: fadeIn 0.45s ease-out; }
+        .dropdown-suggestions { background:#0f1724; border:1px solid #374151; border-radius:6px; position:absolute; z-index:60; width:100%; }
+        .dropdown-suggestions div{ padding:8px 10px; cursor:pointer; }
+        .dropdown-suggestions div:hover{ background:#111827; }
+        /* Ensure modal overlays navbar and centers correctly */
+        #printModal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 99999; }
+        #printModal.show { display: flex; }
+    </style>
+</head>
+<body class="bg-zinc-900 min-h-screen text-zinc-100">
+
+    <!-- Navbar -->
+    <nav class="bg-zinc-800 border-b border-zinc-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo -->
+                <div class="flex items-center">
+                    <img src="{% static 'images/logo.png' %}" alt="HealthLedger" style="width: 13rem;">
+                </div>
+                
+                <div class="flex flex-row items-center space-x-6 w-full justify-end">
+                    <!-- Navigation Links -->
+                    <div class="hidden md:flex space-x-6">
+                        <a class="text-zinc-300 hover:text-zinc-100 transition-colors duration-200 cursor-pointer" onclick="window.location.href='/'">Dashboard</a>
+                        <a class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/analytics'" style="cursor: pointer;">Analytics</a>
+                        <a class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/view_all'" style="cursor: pointer;">Records</a>
+                        <a href="#" class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200" onclick="window.location.href='/logout'">SleepOut</a>
+
+                    </div>
+                    
+                    <!-- User Menu -->
+                    <div class="flex items-center space-x-4">
+                        <button class="text-zinc-400 hover:text-zinc-100 transition-colors duration-200">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                            </svg>
+                        </button>
+                        <div class="flex items-center space-x-2">
+                            <div class="w-8 h-8 bg-zinc-700 rounded-full flex items-center justify-center text-sm font-medium">
+                                <img width="94" height="94" src="https://img.icons8.com/3d-fluency/94/settings-2.png" alt="settings-2"/>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-6 py-8">
+        <div class="kpi-card rounded-lg shadow-2xl overflow-hidden fade-in">
+            <div class="px-8 py-6 border-b border-zinc-600">
+                <h2 class="text-2xl font-semibold">Register New Patient</h2>
+                <p class="text-sm text-zinc-400 mt-1">Create a new patient account for hospital staff use.</p>
+            </div>
+
+            <div class="p-8">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Left: Stats panel (swapped) -->
+                    <div>
+                        <div class="">
+                            <div class="text-xs text-zinc-400">Total Registered Users</div>
+                            <div id="statTotal" class="text-3xl font-bold text-zinc-100 mt-2">--</div>
+
+                            <div class="text-xs text-zinc-400 mt-6">Top Email Domains</div>
+                            <div class="flex flex-wrap gap-2 mt-3" id="domainChips">
+                                <!-- domain chips populated by JS -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Registration Form (swapped) -->
+                    <div>
+                        <form id="registerForm" class="space-y-6">
+                            <!-- UID (auto-generated, readonly) -->
+                            <div>
+                                <label for="uid" class="block text-sm font-medium text-zinc-300">UID (Auto-generated)</label>
+                                <input type="text" id="uid" name="uid" readonly class="mt-1 block w-full rounded-md bg-zinc-900 border border-zinc-700 text-zinc-100 p-2" />
+                            </div>
+
+                            <!-- Name -->
+                            <div>
+                                <label for="name" class="block text-sm font-medium text-zinc-300">Name</label>
+                                <input type="text" id="name" name="name" required class="mt-1 block w-full rounded-md bg-zinc-900 border border-zinc-700 text-zinc-100 p-2" />
+                            </div>
+
+                            <!-- Email with autocomplete -->
+                            <div style="position:relative;">
+                                <label for="email" class="block text-sm font-medium text-zinc-300">Email</label>
+                                <input type="email" id="email" name="email" autocomplete="off" required class="mt-1 block w-full rounded-md bg-zinc-900 border border-zinc-700 text-zinc-100 p-2" />
+                                <div id="emailSuggestions" class="dropdown-suggestions hidden"></div>
+                            </div>
+
+                            <!-- Info / password will be returned from server -->
+                            <div id="regMessage" class="hidden">
+                                <div id="regSuccess" class="text-green-400"></div>
+                                <div id="regError" class="text-red-400"></div>
+                            </div>
+
+                            <div class="flex items-center justify-between">
+                                <button type="submit" id="submitBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white">Register</button>
+                                <div id="printArea" class="hidden">
+                                    <button type="button" id="printBtn" class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded text-white">Open/Print PDF</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Simple modal for success (hidden by default) -->
+    <div id="printModal" class="fixed inset-0 z-60 hidden items-center justify-center bg-black/60">
+        <div class="kpi-card rounded-lg p-4 w-full max-w-lg mx-4 shadow-2xl">
+            <h3 class="text-lg font-semibold">Registration Successful</h3>
+            <p class="text-sm text-zinc-300 mt-2">Patient registered. You can print or download the registration receipt below.</p>
+            <div class="mt-4 flex gap-3">
+                <a id="openPdfLink" href="#" target="_blank" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white">Open PDF</a>
+                <button id="closeModal" class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded text-white">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function(){
+            // Load auth stats and render
+            async function loadAuthStats(){
+                try{
+                    const r = await fetch('/api/auth_stats/');
+                    const j = await r.json();
+                    if(j.total_users !== undefined){
+                        document.getElementById('statTotal').textContent = j.total_users;
+                    }
+                    const chips = document.getElementById('domainChips');
+                    chips.innerHTML = '';
+                    // Keep track of domains already rendered to avoid duplicates like '@gmail.com' vs 'gmail.com'
+                    const rendered = new Set();
+                    if(j.top_domains && j.top_domains.length){
+                        j.top_domains.forEach(td => {
+                            const domain = (td.domain || '').replace(/^@/, '').toLowerCase();
+                            rendered.add(domain);
+                            const el = document.createElement('div');
+                            el.className = 'px-3 py-1 bg-zinc-800 border border-zinc-700 rounded text-sm text-zinc-200';
+                            el.textContent = `${domain}: ${td.count}`;
+                            chips.appendChild(el);
+                        });
+                    }
+                    // also add counts for common domains if not already shown
+                    const common = ['gmail.com','yahoo.com','outlook.com','healthledger.com','email.com','hotmail.com'];
+                    common.forEach(d => {
+                        const domain = d.toLowerCase();
+                        if(rendered.has(domain)) return;
+                        const count = (j.domains && j.domains[domain]) ? j.domains[domain] : 0;
+                        const el = document.createElement('div');
+                        el.className = 'px-3 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm text-zinc-400';
+                        el.textContent = `${domain}: ${count}`;
+                        chips.appendChild(el);
+                        rendered.add(domain);
+                    });
+                    // others
+                    if(j.domains && j.domains.others){
+                        const el = document.createElement('div');
+                        el.className = 'px-3 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm text-zinc-400';
+                        el.textContent = `Others: ${j.domains.others}`;
+                        chips.appendChild(el);
+                    }
+                }catch(e){ console.error('auth stats error', e); }
+            }
+            loadAuthStats();
+            const emailInput = document.getElementById('email');
+            const suggestBox = document.getElementById('emailSuggestions');
+            const domains = ['gmail.com','yahoo.com','outlook.com','healthledger.com','email.com'];
+
+            function showSuggestions(base) {
+                const val = base || '';
+                suggestBox.innerHTML = '';
+                const atIndex = val.indexOf('@');
+                if(atIndex === -1) return hideSuggestions();
+                const local = val.slice(0, atIndex);
+                const partial = val.slice(atIndex+1).toLowerCase();
+                const matches = domains.filter(d => d.indexOf(partial) === 0 || partial === '').slice(0,10);
+                if(matches.length === 0) return hideSuggestions();
+                matches.forEach(d => {
+                    const div = document.createElement('div');
+                    div.textContent = local + '@' + d;
+                    div.addEventListener('click', ()=>{
+                        emailInput.value = div.textContent;
+                        hideSuggestions();
+                    });
+                    suggestBox.appendChild(div);
+                });
+                suggestBox.classList.remove('hidden');
+            }
+
+            function hideSuggestions(){ suggestBox.classList.add('hidden'); suggestBox.innerHTML = ''; }
+
+            emailInput.addEventListener('input', (e)=>{
+                const v = e.target.value;
+                showSuggestions(v);
+            });
+            document.addEventListener('click', (e)=>{ if(!e.target.closest('#email') && !e.target.closest('#emailSuggestions')) hideSuggestions(); });
+
+            // Populate UID on load
+            async function loadUid(){
+                try{
+                    const r = await fetch('/api/generate_uid/');
+                    const j = await r.json();
+                    if(j.uid) document.getElementById('uid').value = j.uid;
+                }catch(e){ console.error('UID load error', e); }
+            }
+            loadUid();
+
+            // Handle form submit
+            document.getElementById('registerForm').addEventListener('submit', async function(e){
+                e.preventDefault();
+                const name = document.getElementById('name').value.trim();
+                const email = document.getElementById('email').value.trim();
+                const submit = document.getElementById('submitBtn');
+                submit.disabled = true; submit.textContent = 'Registering...';
+                try{
+                    const payload = { name, email };
+                    const resp = await fetch('/api/register_user/', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+                    });
+                    const data = await resp.json();
+                    if(data.success){
+                        document.getElementById('regMessage').classList.remove('hidden');
+                        document.getElementById('regSuccess').textContent = 'Registered UID: '+data.uid+ ' • Temporary Password: '+data.password;
+                        // show print button and modal
+                        const pdfUrl = data.pdf_url;
+                        document.getElementById('openPdfLink').href = pdfUrl;
+                        document.getElementById('printArea').classList.remove('hidden');
+                        document.getElementById('printBtn').onclick = ()=> window.open(pdfUrl,'_blank');
+                        document.getElementById('printModal').classList.remove('hidden');
+                        document.getElementById('closeModal').onclick = ()=> document.getElementById('printModal').classList.add('hidden');
+                        // Set UID field to returned uid
+                        document.getElementById('uid').value = data.uid;
+                        // Refresh stats to reflect new registration
+                        if(typeof loadAuthStats === 'function') loadAuthStats();
+                    } else {
+                        document.getElementById('regMessage').classList.remove('hidden');
+                        document.getElementById('regError').textContent = data.error || 'Registration failed';
+                    }
+                }catch(err){
+                    document.getElementById('regMessage').classList.remove('hidden');
+                    document.getElementById('regError').textContent = 'Unexpected error';
+                    console.error(err);
+                } finally{ submit.disabled = false; submit.textContent = 'Register'; }
+            });
+
+        })();
+    </script>
+</body>
+</html>
