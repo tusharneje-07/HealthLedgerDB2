@@ -29,7 +29,7 @@ from reportlab.graphics.charts.barcharts import VerticalBarChart
 load_dotenv()
 
 
-# ===================================================== HIGH LEVEL VIEWS
+# ===================================================== HIGH LEVEL VIEWS =====================================================
 # ===================================================== MANAGEMENT VIEWS
 def DASH(request):
     auth_token = request.COOKIES.get('auth_token')
@@ -45,8 +45,6 @@ def UPDATE(request):
     return render(request, 'src/management/UPDATE.html')
 
 def VIEW_ALL(request):
-    # Prefer the summed INVOICE_LOGS total as the source of truth for paid amount.
-    # Fall back to register.PAID_AMT only when no logs exist for the invoice.
     query = f"""
         SELECT
             p.REC_NUMBER,
@@ -80,7 +78,6 @@ def VIEW_ALL(request):
     if not invoices:
         return render(request, 'src/management/VIEW_ALL.html', {"records": []})
 
-    # Collect invoice numbers for a single logs query
     invoice_nums = [f"'{row['INNVOCE_NUM']}'" for row in invoices if row.get('INNVOCE_NUM') is not None]
     formatted_result = []
 
@@ -103,15 +100,12 @@ def VIEW_ALL(request):
                         "log_remark": log.get("LOG_REMARK"),
                     })
 
-    # Assemble formatted result, prefer the sum of logs (if present) for paid_amount
     for row in invoices:
         amount = float(row.get("AMOUNT") or 0)
         invoice_num = row.get("INNVOCE_NUM")
-        # Sum logs for this invoice if any exist
         detailed_logs = logs_by_invoice.get(invoice_num, [])
         sum_from_logs = sum(l.get("paid_amount_on_date", 0.0) for l in detailed_logs)
 
-        # Use logs sum if it exists (>0), otherwise use the PAID_AMOUNT from the main query
         paid_amount = float(sum_from_logs) if sum_from_logs > 0 else float(row.get("PAID_AMOUNT") or 0.0)
 
         remaining = max(0, amount - paid_amount)
@@ -137,7 +131,6 @@ def PRINT_INVOICE(request, invoice_num):
     return render(request, 'src/management/PRINT_INVOICE.html', {"invoice_num": invoice_num})
 
 def LOGIN(request):
-    # Support both GET (render) and POST (form-based login)
     if request.method == 'GET':
         return render(request, 'src/management/LOGIN.html')
 
@@ -145,7 +138,6 @@ def LOGIN(request):
     password = request.POST.get('password')
     user_type = request.POST.get('user_type') or 'S'  # Default to 'S' for staff
     
-    # Key Based Login
     if request.method == 'POST' and request.POST.get('has_token_key'):
         auth_token = request.COOKIES.get('auth_token')
         has_token_key = request.POST.get('has_token_key')
@@ -167,7 +159,6 @@ def LOGIN(request):
                 email = (user.get('EMAIL') or user.get('UID') or '')
                 auth_token = hashlib.sha256(email.encode()).hexdigest()
 
-                # set session values now (so we can return immediately)
                 request.session[f'{auth_token}'] = auth_token
                 request.session[f'{auth_token}_user_uid'] = user.get('UID')
                 request.session[f'{auth_token}_user_name'] = user.get('NAME')
@@ -225,6 +216,64 @@ def LOGOUT_HARD(request, status):
         response.delete_cookie('user_type')
         
     return response
+
+def razorpay_payment_window(request):
+    amount = request.GET.get('amount')
+    invoice_num = request.GET.get('invoice_num')
+    uid = request.GET.get('uid')
+    total_amount = request.GET.get('total_amount')
+    
+    if not all([amount, invoice_num, uid, total_amount]):
+        return HttpResponse("Missing required parameters", status=400)
+    
+    try:
+        amount = float(amount)
+        total_amount = float(total_amount)
+    except ValueError:
+        return HttpResponse("Invalid amount", status=400)
+    
+    try:
+        amount_in_paise = int(amount * 100)
+        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+        
+        order_data = {
+            'amount': amount_in_paise,
+            'currency': 'INR',
+            'payment_capture': 1,
+            'notes': {
+                'invoice_num': invoice_num,
+                'uid': uid
+            }
+        }
+        
+        order = client.order.create(data=order_data)
+        order_id = order['id']
+        
+        context = {
+            'amount': amount,
+            'invoice_num': invoice_num,
+            'uid': uid,
+            'total_amount': total_amount,
+            'order_id': order_id,
+            'razorpay_key': settings.RAZORPAY_KEY_ID,
+            'amount_in_paise': amount_in_paise
+        }
+        
+        return render(request, 'src/management/RAZORPAY_PAYMENT.html', context)
+        
+    except Exception as e:
+        return HttpResponse(f"Error creating payment: {str(e)}", status=500)
+
+def ANALYTICAL_DASHBOARD(request):
+    auth_token = request.COOKIES.get('auth_token')
+    if auth_token and request.session.get(f'{auth_token}_is_authenticated'):
+        return render(request, 'src/management/ANALYTICS.html')
+    else:
+        return redirect('/login')
+
+def REGISTER(request):
+    return render(request, 'src/management/REGISTER.html')
+
 # ===================================================== MANAGEMENT VIEWS
 
 # ===================================================== USER VIEWS
@@ -242,7 +291,6 @@ def user_login(request):
                 request.session[f'{auth_token}_is_authenticated'] = True
                 
                 email = request.COOKIES.get('auth_token_name').replace('"','')
-                # Use plain text email in URL instead of base64
                 return redirect('/user/'+email+'/')
             else:
                 return render(request, 'src/management/LOGIN.html', {'error': 'Invalid user authentication key'})
@@ -258,12 +306,11 @@ def user_login(request):
                 request.session[f'{auth_token}_user_name'] = user.get('NAME')
                 request.session[f'{auth_token}_is_authenticated'] = True
                 request.session[f'{auth_token}'] = auth_token
-                # Use plain text email in URL instead of base64
                 response = redirect('/user/'+email+'/')
                 response.set_cookie(
                     'auth_token',
                     auth_token,
-                    max_age=3 * 60 * 60,   # 3 hours in seconds
+                    max_age=3 * 60 * 60,
                     httponly=False,
                     secure=request.is_secure(),
                     samesite='Lax'
@@ -271,7 +318,7 @@ def user_login(request):
                 response.set_cookie(
                     'auth_token_name',
                     email,
-                    max_age=3 * 60 * 60,   # 3 hours in seconds
+                    max_age=3 * 60 * 60,
                     httponly=False,
                     secure=request.is_secure(),
                     samesite='Lax'
@@ -279,21 +326,19 @@ def user_login(request):
                 response.set_cookie(
                     'user_type',
                     'P',
-                    max_age=3 * 60 * 60,   # 3 hours in seconds
+                    max_age=3 * 60 * 60,
                     httponly=False,
                     secure=request.is_secure(),
                     samesite='Lax'
                 )
                 return response
 
-        # Failed login
         return render(request, 'src/management/LOGIN.html', {'error': 'Invalid UID or password'})
     return render(request, 'src/user/DASH.html')
 
 def user_dashboard(request, user_email):
     auth_token = request.COOKIES.get('auth_token')
     if auth_token and request.session.get(f'{auth_token}_is_authenticated'):
-        # user_email is already in plain text format, no need to decode
         return render(request, 'src/user/DASH.html', {'user_email_d': user_email, 'user_email': user_email})
     else:
         return redirect('/login/')
@@ -301,89 +346,19 @@ def user_dashboard(request, user_email):
 def user_invoices(request, user_email):
     auth_token = request.COOKIES.get('auth_token')
     if auth_token and request.session.get(f'{auth_token}_is_authenticated'):
-        # user_email is already in plain text format, no need to decode
         return render(request, 'src/user/INVOICES.html', {'user_email_d': user_email, 'user_email': user_email})
     else:
         return redirect('/login/')
+
 # ===================================================== USER VIEWS
+# ===================================================== HIGH LEVEL VIEWS =====================================================
 
-
-def api_user_invoices(request, user_email):
-    """Return invoices for the provided base64-encoded user email.
-    URL: /api/user/invoices/<str:user_email>/
-    """
-    # decode base64 email
-    try:
-        decoded_email = base64.b64decode(user_email).decode('utf-8')
-    except Exception:
-        return JsonResponse({'error': 'Invalid encoded email'}, status=400)
-
-    # sanitize
-    email_s = decoded_email.replace("'", "''")
-
-    # resolve UID
-    uid_q = f"SELECT UID FROM AUTHENTICATION WHERE EMAIL = '{email_s}' FETCH FIRST 1 ROW ONLY"
-    ok, uid_res = DB2Query.runSelectQuery(uid_q)
-    if not ok or not uid_res:
-        return JsonResponse([], safe=False)
-
-    uid = uid_res[0].get('UID')
-    if not uid:
-        return JsonResponse([], safe=False)
-
-    # fetch invoices for UID (aggregate paid amounts)
-    invoice_query = f"""
-        SELECT 
-            p.REC_NUMBER,
-            p.UID,
-            p.USERNAME,
-            p.INNVOCE_NUM,
-            p.DATE,
-            p.AMOUNT,
-            COALESCE(SUM(il.PAID_AMOUNT_ON_DATE), 0) AS PAID_AMOUNT
-        FROM patient_data p
-        LEFT JOIN INVOICE_LOGS il ON p.INNVOCE_NUM = il.INVOICE_NUMBER
-        WHERE p.UID = '{uid}'
-        GROUP BY p.REC_NUMBER, p.UID, p.USERNAME, p.INNVOCE_NUM, p.DATE, p.AMOUNT
-        ORDER BY p.DATE DESC
-    """
-
-    success, invoices = DB2Query.runSelectQuery(invoice_query)
-    if not success or not invoices:
-        return JsonResponse([], safe=False)
-
-    formatted = []
-    for row in invoices:
-        amount = float(row.get('AMOUNT') or 0)
-        paid_amount = float(row.get('PAID_AMOUNT') or 0)
-        remaining = max(0, amount - paid_amount)
-        remark = 'Paid' if paid_amount >= amount else 'Pending'
-
-        formatted.append({
-            'recNumber': row.get('REC_NUMBER'),
-            'uid': row.get('UID'),
-            'username': row.get('USERNAME'),
-            'invoiceNum': row.get('INNVOCE_NUM'),
-            'date': str(row.get('DATE')),
-            'amount': amount,
-            'paidAmount': paid_amount,
-            'remainingAmount': remaining,
-            'remark': remark,
-        })
-
-    return JsonResponse(formatted, safe=False)
-    
-
-# ===================================================== HIGH LEVEL VIEWS
-
-# ===================================================== API VIEWS
-
+# ===================================================== API VIEWS =====================================================
 def get_data_by_uid(request):
     uid = request.GET.get('uid')
     if not uid:
         return JsonResponse({"error": "UID is required"}, status=400)
 
-    # 🧩 Single optimized JOIN query to fetch both patient and payment info
     query = f"""
         SELECT 
             p.REC_NUMBER,
@@ -429,7 +404,6 @@ def get_data_by_invoice_id(request):
     if not invoice_num:
         return JsonResponse({"error": "Invoice number is required"}, status=400)
 
-    # Fetch invoice summary with aggregated paid amount (no N+1)
     invoice_query = f"""
         SELECT 
             p.REC_NUMBER,
@@ -460,7 +434,6 @@ def get_data_by_invoice_id(request):
     remaining = max(0, amount - paid_amount)
     remark = "Paid" if paid_amount >= amount else "Pending"
 
-    # Fetch all logs for this invoice
     log_query = f"""
         SELECT LOG_DATE, PAID_AMOUNT_ON_DATE, LOG_REMARK
         FROM INVOICE_LOGS
@@ -500,9 +473,8 @@ def update_payment(request):
     invoice_num = request.GET.get("invoice_num")
     paid_amount = request.GET.get("paid_amount")
     total_amount = request.GET.get("total_amount")
-    by = request.GET.get("by", "mode:cash|id:null")  # Default to cash payment
+    by = request.GET.get("by", "mode:cash|id:null")
 
-    # ✅ 1. Input validation
     if not uid or not invoice_num or not paid_amount:
         return JsonResponse(
             {"error": "uid, invoice_num, and paid_amount are required"}, status=400
@@ -516,7 +488,6 @@ def update_payment(request):
             {"error": "paid_amount and total_amount must be numeric"}, status=400
         )
 
-    # ✅ 2. Parse payment method from 'by' parameter
     payment_mode = "CASH"
     payment_id = "null"
     
@@ -530,12 +501,9 @@ def update_payment(request):
                 elif key.strip() == 'id':
                     payment_id = value.strip()
 
-    # ✅ 3. Precompute values once
     remaining_amount = max(0, total_amount - paid_amount)
     current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # ✅ 4. Run queries in sequence (minimal overhead)
-    # Update register
     update_query = (
         f"UPDATE register "
         f"SET PAID_AMT = {paid_amount} "
@@ -556,7 +524,6 @@ def update_payment(request):
     DB2Query.runQuery(insert_activity_query)
 
     
-    
     log_remark = f"Payment updated of {invoice_num}, ₹{paid_amount}/- Paid via {payment_mode.upper()} (Payment ID: {payment_id})"
     insert_invoice_query = (
         "INSERT INTO INVOICE_LOGS "
@@ -567,16 +534,13 @@ def update_payment(request):
     )
     DB2Query.runQuery(insert_invoice_query)
 
-    # ✅ 4. Return response
     return JsonResponse({"message": "Payment updated successfully"})
 
 def recent_activity(request):
     if request.method == "GET":
-        # Fetch last 10 records from DB2 using your helper function
         sql = "SELECT log_name, log_desc, log_date_time FROM activity ORDER BY log_date_time DESC FETCH FIRST 10 ROWS ONLY"
         success, result = DB2Query.runSelectQuery(sql)
         if success:
-            # Convert DB2 result to desired JSON format
             data = []
             for row in result:
                 data.append({
@@ -589,11 +553,6 @@ def recent_activity(request):
             return JsonResponse({"error": result}, status=500)
         
 def getstats(request):
-    # keep request usage to avoid linter warnings
-    _ = request.GET.get('dummy')
-
-    # Use invoice-level aggregation from INVOICE_LOGS to compute paid amounts,
-    # then compute pending/paid customer counts per invoice to avoid relying on register.PAID_AMT.
     query = """
         SELECT
             COUNT(*) AS TOTAL_RECORDS,
@@ -654,17 +613,14 @@ def add_new_data_row(request):
         except ValueError:
             return JsonResponse({"error": "Amount must be a number"}, status=400)
 
-        # Insert into patient_data
         patient_data_sql = f"""
             INSERT INTO patient_data (uid, username, innvoce_num, date, amount)
             VALUES ('{uid}', '{username}', '{innvoce_num}', '{date}', {amount})
         """
         a, b = DB2Query.runQuery(patient_data_sql)
-         # Check if insertion was successful
         if not a:
             return JsonResponse({"error": f"Failed to insert into patient_data: {b}"}, status=500)
 
-        # Insert into register with initial paid_amt as 0
         register_sql = f"""
             INSERT INTO register (uid, innvoce_num, paid_amt)
             VALUES ('{uid}', '{innvoce_num}', 0)
@@ -749,7 +705,6 @@ def detailed_invoice_view(request, invoice_num):
     return JsonResponse(invoice_data)
 
 def load_data(request):
-    # support pagination (offset) and text search
     try:
         size = int(request.GET.get("size", 50))
         offset = int(request.GET.get("offset", 0))
@@ -757,7 +712,6 @@ def load_data(request):
         return JsonResponse({"error": "size Sand offset must be numbers"}, status=400)
 
     search = (request.GET.get('search') or '').strip()
-    # optional date/status filters
     date_from = (request.GET.get('date_from') or '').strip()
     date_to = (request.GET.get('date_to') or '').strip()
     status = (request.GET.get('status') or '').strip().lower()  # expected: 'paid' or 'pending' or ''
@@ -765,7 +719,6 @@ def load_data(request):
     if size <= 0 or size > 1000 or offset < 0:
         return JsonResponse({"error": "Invalid size/offset"}, status=400)
 
-    # Build optional WHERE clause for a basic text search (UID, USERNAME, INNVOCE_NUM)
     where_clause = ""
     wheres = []
     if search:
@@ -775,7 +728,6 @@ def load_data(request):
             f"OR LOWER(p.UID) LIKE LOWER('%{s}%') "
             f"OR LOWER(p.INNVOCE_NUM) LIKE LOWER('%{s}%'))"
         )
-    # date filters assume DATE column is comparable using string ISO or DB2 compatible format
     if date_from:
         df = date_from.replace("'", "''")
         wheres.append(f"p.DATE >= '{df}'")
@@ -787,10 +739,6 @@ def load_data(request):
     if wheres:
         where_clause = 'WHERE ' + ' AND '.join(wheres)
 
-    # ✅ OPTIMIZATION 1: Use CTE for better query performance
-    # ✅ OPTIMIZATION 2: Apply status filter in SQL, not Python
-    # Pre-compute paid amounts in CTE, then filter by status in SQL
-    
     base_cte = f"""
         WITH InvoiceData AS (
             SELECT 
@@ -810,7 +758,6 @@ def load_data(request):
         )
     """
     
-    # Add status filter to SQL if provided
     status_filter = ""
     if status == 'paid':
         status_filter = "WHERE PAID_AMOUNT >= AMOUNT"
@@ -833,37 +780,29 @@ def load_data(request):
         FETCH FIRST {size} ROWS ONLY
     """
 
-    # Execute both queries in parallel
     parallel_queries = [count_query, invoice_query]
     success, results = DB2Query.runParallelQueries(parallel_queries, max_workers=10)
     
     if not success:
         return JsonResponse({"error": f"Failed to load data: {results}"}, status=500)
 
-    # Parse results - results is a list of query results
-    # First result is count query (single row), second is invoice query (multiple rows)
     total_count = 0
     invoices = []
     
     if len(results) >= 2:
-        # First query result (count)
         count_result = results[0]
         if count_result and len(count_result) > 0:
             total_count = int(count_result[0].get('TOTAL') or count_result[0].get('total') or 0)
         
-        # Second query result (invoices)
         invoices = results[1] if results[1] else []
     else:
-        # Fallback - shouldn't happen but handle gracefully
         return JsonResponse({"error": "Unexpected query results format"}, status=500)
 
     if not invoices:
-        # Return empty list and include X-Total-Count header
         resp = JsonResponse([], safe=False)
         resp['X-Total-Count'] = str(total_count)
         return resp
 
-    # ✅ OPTIMIZATION 3: Fetch logs in a SINGLE optimized query instead of batches
     invoice_nums = [f"'{row['INNVOCE_NUM']}'" for row in invoices]
     invoice_num_list = ", ".join(invoice_nums)
     
@@ -874,7 +813,6 @@ def load_data(request):
         ORDER BY INVOICE_NUMBER, LOG_DATE DESC
     """
     
-    # Execute log query
     logs_by_invoice = defaultdict(list)
     log_success, log_results = DB2Query.runSelectQuery(log_query)
     
@@ -887,7 +825,6 @@ def load_data(request):
                     "log_remark": log.get("LOG_REMARK"),
                 })
 
-    # ✅ Assemble result in memory (status already filtered in SQL)
     formatted_result = []
     for row in invoices:
         amount = float(row["AMOUNT"])
@@ -922,16 +859,12 @@ def load_data(request):
             },
         })
 
-    # Attach total count header
     resp = JsonResponse(formatted_result, safe=False)
     resp['X-Total-Count'] = str(total_count)
     
     return resp
 
 def records_count(request):
-    """Return the total number of records matching current filters.
-       This endpoint returns JSON: { total: N }
-    """
     search = (request.GET.get('search') or '').strip()
     date_from = (request.GET.get('date_from') or '').strip()
     date_to = (request.GET.get('date_to') or '').strip()
@@ -979,10 +912,8 @@ def user_stats(request, user_email):
     if not user_email:
         return JsonResponse({"error": "User email not found in session"}, status=400)
 
-    # sanitize email to avoid breaking SQL
     email_s = user_email.replace("'", "''")
 
-    # 1) Resolve UID for the email
     uid_q = f"SELECT UID FROM AUTHENTICATION WHERE EMAIL = '{email_s}' FETCH FIRST 1 ROW ONLY"
     ok, uid_res = DB2Query.runSelectQuery(uid_q)
     if not ok:
@@ -994,7 +925,6 @@ def user_stats(request, user_email):
     if not uid:
         return JsonResponse({"error": "User UID not found"}, status=404)
 
-    # compute month/year values for payment summaries
     now = timezone.now()
     this_month = now.month
     this_year = now.year
@@ -1005,7 +935,6 @@ def user_stats(request, user_email):
         last_month = this_month - 1
         last_month_year = this_year
 
-    # 2) Summary: aggregate counts and sums per invoice using invoice logs aggregation
     summary_query = f"""
         WITH il AS (
             SELECT INVOICE_NUMBER, COALESCE(SUM(PAID_AMOUNT_ON_DATE), 0) AS TOTAL_PAID
@@ -1041,7 +970,6 @@ def user_stats(request, user_email):
         "pending_count": int(srow.get("PENDING_COUNT") or 0),
     }
 
-    # 3) Payment summary: this_month and last_month sums using MONTH/YEAR to avoid date math
     payments_q = f"""
         WITH user_invoices AS (
             SELECT INNVOCE_NUM FROM patient_data WHERE UID = '{uid}'
@@ -1062,7 +990,6 @@ def user_stats(request, user_email):
         "last_month": float(prow.get("LAST_MONTH") or 0.0)
     }
 
-    # 4) Recent transactions: last 5 logs for user's invoices (status only 'paid' or 'pending')
     recent_q = f"""
         WITH user_invoices AS (
             SELECT INNVOCE_NUM, AMOUNT FROM patient_data WHERE UID = '{uid}'
@@ -1091,7 +1018,6 @@ def user_stats(request, user_email):
             total_paid = float(r.get("TOTAL_PAID") or 0.0)
             invoice_amount = float(r.get("AMOUNT") or 0.0)
 
-            # Only two statuses: paid or pending
             status = "paid" if total_paid >= invoice_amount else "pending"
 
             recent_transactions.append({
@@ -1111,15 +1037,10 @@ def user_stats(request, user_email):
 
 @csrf_exempt
 def initiate_payment(request):
-    """
-    Initiate payment: receives amount, invoice_num, uid from frontend
-    Creates Razorpay order and returns form data
-    """
     if request.method != "POST":
         return JsonResponse({"error": "Only POST method allowed"}, status=405)
     
     try:
-        # Get payment details from POST
         data = json.loads(request.body)
         amount = float(data.get('amount', 0))
         invoice_num = data.get('invoice_num', '')
@@ -1128,21 +1049,17 @@ def initiate_payment(request):
         if not amount or not invoice_num or not uid:
             return JsonResponse({"error": "Missing required fields"}, status=400)
         
-        # Validate amount is positive
         if amount <= 0:
             return JsonResponse({"error": "Invalid amount"}, status=400)
         
-        # Convert to paise for Razorpay (INR smallest unit)
         amount_in_paise = int(amount * 100)
         
-        # Initialize Razorpay client
         client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
         
-        # Create Razorpay order
         order_data = {
             'amount': amount_in_paise,
             'currency': 'INR',
-            'payment_capture': 1,  # Auto-capture payment
+            'payment_capture': 1,
             'notes': {
                 'invoice_num': invoice_num,
                 'uid': uid
@@ -1152,7 +1069,6 @@ def initiate_payment(request):
         order = client.order.create(data=order_data)
         order_id = order['id']
         
-        # Return payment details to frontend
         return JsonResponse({
             "success": True,
             "order_id": order_id,
@@ -1170,20 +1086,14 @@ def initiate_payment(request):
 
 @csrf_exempt
 def verify_payment(request):
-    """
-    Verify Razorpay payment signature and update invoice payment record
-    This is called after Razorpay payment success
-    """
     if request.method != "POST":
         return JsonResponse({"error": "Only POST method allowed"}, status=405)
     
     try:
-        # Get payment verification data
         razorpay_payment_id = request.POST.get('razorpay_payment_id')
         razorpay_order_id = request.POST.get('razorpay_order_id')
         razorpay_signature = request.POST.get('razorpay_signature')
         
-        # Get invoice details
         invoice_num = request.POST.get('invoice_num')
         uid = request.POST.get('uid')
         amount = request.POST.get('amount')
@@ -1192,10 +1102,8 @@ def verify_payment(request):
         if not all([razorpay_payment_id, razorpay_order_id, razorpay_signature, invoice_num, uid, amount, total_amount]):
             return JsonResponse({"error": "Missing required fields"}, status=400)
         
-        # Initialize Razorpay client
         client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
         
-        # Verify payment signature
         params_dict = {
             'razorpay_order_id': razorpay_order_id,
             'razorpay_payment_id': razorpay_payment_id,
@@ -1207,20 +1115,16 @@ def verify_payment(request):
         except razorpay.errors.SignatureVerificationError:
             return JsonResponse({"error": "Payment signature verification failed"}, status=400)
         
-        # Payment verified successfully - update database
         paid_amount = float(amount)
         total_amt = float(total_amount)
         
-        # Sanitize inputs
         uid_s = uid.replace("'", "''")
         invoice_s = invoice_num.replace("'", "''")
         payment_id_s = razorpay_payment_id.replace("'", "''")
         
-        # Compute remaining
         remaining_amount = max(0, total_amt - paid_amount)
         current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # Update register table
         update_query = (
             f"UPDATE register "
             f"SET PAID_AMT = {paid_amount} "
@@ -1247,7 +1151,6 @@ def verify_payment(request):
         )
         DB2Query.runQuery(insert_invoice_query)
         
-        # Return success response
         return JsonResponse({
             "success": True,
             "message": "Payment verified and updated successfully",
@@ -1262,98 +1165,80 @@ def verify_payment(request):
         return JsonResponse({"error": str(e)}, status=500)
 
 def user_payment(request, amount):
-    """
-    Placeholder for Razorpay payment integration.
-    Currently not in use - payments are handled via /api/initiate_payment/ and /api/verify_payment/
-    
-    To implement full Razorpay integration:
-    1. Create Payment model
-    2. Set up Razorpay client with API keys
-    3. Implement order creation and verification
-    """
     return JsonResponse({
         "error": "This endpoint is deprecated. Use /api/initiate_payment/ and /api/verify_payment/ instead."
     }, status=501)
 
-def razorpay_payment_window(request):
-    """
-    Render the Razorpay payment window (opens in popup)
-    """
-    amount = request.GET.get('amount')
-    invoice_num = request.GET.get('invoice_num')
-    uid = request.GET.get('uid')
-    total_amount = request.GET.get('total_amount')
-    
-    if not all([amount, invoice_num, uid, total_amount]):
-        return HttpResponse("Missing required parameters", status=400)
-    
+def api_user_invoices(request, user_email):
     try:
-        amount = float(amount)
-        total_amount = float(total_amount)
-    except ValueError:
-        return HttpResponse("Invalid amount", status=400)
-    
-    # Create Razorpay order
-    try:
-        amount_in_paise = int(amount * 100)
-        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
-        
-        order_data = {
-            'amount': amount_in_paise,
-            'currency': 'INR',
-            'payment_capture': 1,
-            'notes': {
-                'invoice_num': invoice_num,
-                'uid': uid
-            }
-        }
-        
-        order = client.order.create(data=order_data)
-        order_id = order['id']
-        
-        context = {
-            'amount': amount,
-            'invoice_num': invoice_num,
-            'uid': uid,
-            'total_amount': total_amount,
-            'order_id': order_id,
-            'razorpay_key': settings.RAZORPAY_KEY_ID,
-            'amount_in_paise': amount_in_paise
-        }
-        
-        return render(request, 'src/management/RAZORPAY_PAYMENT.html', context)
-        
-    except Exception as e:
-        return HttpResponse(f"Error creating payment: {str(e)}", status=500)
+        decoded_email = base64.b64decode(user_email).decode('utf-8')
+    except Exception:
+        return JsonResponse({'error': 'Invalid encoded email'}, status=400)
 
-# ===================================================== ANALYTICS VIEWS
-def analytics_dashboard(request):
-    """Render the main analytics dashboard page."""
-    auth_token = request.COOKIES.get('auth_token')
-    if auth_token and request.session.get(f'{auth_token}_is_authenticated'):
-        return render(request, 'src/management/ANALYTICS.html')
-    else:
-        return redirect('/login')
+    email_s = decoded_email.replace("'", "''")
+
+    uid_q = f"SELECT UID FROM AUTHENTICATION WHERE EMAIL = '{email_s}' FETCH FIRST 1 ROW ONLY"
+    ok, uid_res = DB2Query.runSelectQuery(uid_q)
+    if not ok or not uid_res:
+        return JsonResponse([], safe=False)
+
+    uid = uid_res[0].get('UID')
+    if not uid:
+        return JsonResponse([], safe=False)
+
+    invoice_query = f"""
+        SELECT 
+            p.REC_NUMBER,
+            p.UID,
+            p.USERNAME,
+            p.INNVOCE_NUM,
+            p.DATE,
+            p.AMOUNT,
+            COALESCE(SUM(il.PAID_AMOUNT_ON_DATE), 0) AS PAID_AMOUNT
+        FROM patient_data p
+        LEFT JOIN INVOICE_LOGS il ON p.INNVOCE_NUM = il.INVOICE_NUMBER
+        WHERE p.UID = '{uid}'
+        GROUP BY p.REC_NUMBER, p.UID, p.USERNAME, p.INNVOCE_NUM, p.DATE, p.AMOUNT
+        ORDER BY p.DATE DESC
+    """
+
+    success, invoices = DB2Query.runSelectQuery(invoice_query)
+    if not success or not invoices:
+        return JsonResponse([], safe=False)
+
+    formatted = []
+    for row in invoices:
+        amount = float(row.get('AMOUNT') or 0)
+        paid_amount = float(row.get('PAID_AMOUNT') or 0)
+        remaining = max(0, amount - paid_amount)
+        remark = 'Paid' if paid_amount >= amount else 'Pending'
+
+        formatted.append({
+            'recNumber': row.get('REC_NUMBER'),
+            'uid': row.get('UID'),
+            'username': row.get('USERNAME'),
+            'invoiceNum': row.get('INNVOCE_NUM'),
+            'date': str(row.get('DATE')),
+            'amount': amount,
+            'paidAmount': paid_amount,
+            'remainingAmount': remaining,
+            'remark': remark,
+        })
+
+    return JsonResponse(formatted, safe=False)
 
 def api_financial_summary(request):
-    """
-    Return JSON data for total revenue, outstanding, and monthly trends.
-    Endpoint: /api/financial_summary/
-    """
     try:
-        # Total revenue from all invoices (from PATIENT_DATA table)
         total_revenue_query = """
             SELECT COALESCE(SUM(AMOUNT), 0) AS TOTAL_REVENUE
             FROM PATIENT_DATA
         """
         
-        # Total collected payments
         total_collected_query = """
             SELECT COALESCE(SUM(PAID_AMOUNT_ON_DATE), 0) AS TOTAL_COLLECTED
             FROM INVOICE_LOGS
         """
         
-        # Outstanding balance - calculate from patient data minus total paid
         outstanding_query = """
             SELECT COALESCE(SUM(p.AMOUNT) - SUM(COALESCE(il.TOTAL_PAID, 0)), 0) AS OUTSTANDING
             FROM PATIENT_DATA p
@@ -1364,7 +1249,6 @@ def api_financial_summary(request):
             ) il ON p.INNVOCE_NUM = il.INVOICE_NUMBER
         """
         
-        # Monthly revenue trend (last 12 months)
         monthly_query = """
             SELECT 
                 SUBSTR(CHAR(LOG_DATE), 1, 7) AS MONTH,
@@ -1375,7 +1259,6 @@ def api_financial_summary(request):
             ORDER BY MONTH ASC
         """
         
-        # Execute queries
         success1, rev_result = DB2Query.runSelectQuery(total_revenue_query)
         success2, col_result = DB2Query.runSelectQuery(total_collected_query)
         success3, out_result = DB2Query.runSelectQuery(outstanding_query)
@@ -1400,24 +1283,17 @@ def api_financial_summary(request):
         return JsonResponse({"error": f"Error loading financial summary: {str(e)}"}, status=500)
 
 def api_patient_stats(request):
-    """
-    Return patient-related statistics and spending patterns.
-    Endpoint: /api/patient_stats/
-    """
     try:
-        # Total unique patients
         total_patients_query = """
             SELECT COUNT(DISTINCT UID) AS TOTAL_PATIENTS
             FROM PATIENT_DATA
         """
         
-        # Average spending per patient
         avg_spending_query = """
             SELECT COALESCE(AVG(AMOUNT), 0) AS AVG_SPENDING
             FROM PATIENT_DATA
         """
         
-        # Repeat patients (more than one invoice)
         repeat_patients_query = """
             SELECT COUNT(*) AS REPEAT_PATIENTS
             FROM (
@@ -1428,7 +1304,6 @@ def api_patient_stats(request):
             ) AS repeat
         """
         
-        # Top 10 paying patients
         top_patients_query = """
             SELECT 
                 p.UID,
@@ -1441,7 +1316,6 @@ def api_patient_stats(request):
             FETCH FIRST 10 ROWS ONLY
         """
         
-        # Execute queries
         success1, pat_result = DB2Query.runSelectQuery(total_patients_query)
         success2, avg_result = DB2Query.runSelectQuery(avg_spending_query)
         success3, rep_result = DB2Query.runSelectQuery(repeat_patients_query)
@@ -1473,12 +1347,7 @@ def api_patient_stats(request):
         return JsonResponse({"error": f"Error loading patient stats: {str(e)}"}, status=500)
 
 def api_activity_trends(request):
-    """
-    Return user activity counts and system logs.
-    Endpoint: /api/activity_trends/
-    """
     try:
-        # Invoice volume trend (last 12 months)
         invoice_volume_query = """
             SELECT 
                 SUBSTR(CHAR(DATE), 1, 7) AS MONTH,
@@ -1489,7 +1358,6 @@ def api_activity_trends(request):
             ORDER BY MONTH ASC
         """
         
-        # Recent activity logs (last 10)
         recent_logs_query = """
             SELECT LOG_NAME, LOG_DESC, LOG_DATE_TIME
             FROM ACTIVITY
@@ -1497,7 +1365,6 @@ def api_activity_trends(request):
             FETCH FIRST 10 ROWS ONLY
         """
         
-        # Execute queries
         success1, vol_result = DB2Query.runSelectQuery(invoice_volume_query)
         success2, log_result = DB2Query.runSelectQuery(recent_logs_query)
         
@@ -1524,10 +1391,6 @@ def api_activity_trends(request):
         return JsonResponse({"error": f"Error loading activity trends: {str(e)}"}, status=500)
 
 def api_payment_modes(request):
-    """
-    Return breakdown of payments by mode.
-    Endpoint: /api/payment_modes/
-    """
     try:
         query = """
             SELECT 
@@ -1563,10 +1426,6 @@ def api_payment_modes(request):
         return JsonResponse({"error": f"Error loading payment modes: {str(e)}"}, status=500)
 
 def api_patients_list(request):
-    """
-    Return complete list of all patients with their invoice and payment status.
-    Endpoint: /api/patients_list/
-    """
     try:
         query = """
             SELECT 
@@ -1614,17 +1473,7 @@ def api_patients_list(request):
 
 @csrf_exempt
 def api_ai_insights(request):
-    """
-    Generate AI-powered insights using Groq API (llama-3.1-8b-instant).
-    Collects analytics data, constructs a structured prompt, calls the Groq model,
-    and returns insights with highlights and confidence.
-    
-    Security: API key is read from .env, never exposed to client.
-    Endpoint: /api/ai_insights/
-    """
-   
     try:
-        # Read Groq configuration from environment
         groq_api_key = os.getenv('GROQ_API_KEY')
         groq_model = os.getenv('GROQ_MODEL', 'llama-3.1-8b-instant')
         
@@ -1635,14 +1484,11 @@ def api_ai_insights(request):
                 "confidence_score": 0.0
             })
         
-        # Parse request body for optional parameters
         try:
             body = json.loads(request.body) if request.body else {}
         except json.JSONDecodeError:
             body = {}
         
-        # Collect analytics data for the prompt
-        # 1. Financial summary - Execute queries separately for accuracy
         total_revenue_query = """
             SELECT COALESCE(SUM(AMOUNT), 0) AS TOTAL_REVENUE
             FROM PATIENT_DATA
@@ -1673,7 +1519,6 @@ def api_ai_insights(request):
             FROM INVOICE_LOGS
         """
         
-        # 2. Monthly revenue trend (last 6 months)
         monthly_query = """
             SELECT 
                 SUBSTR(CHAR(LOG_DATE), 1, 7) AS MONTH,
@@ -1686,7 +1531,6 @@ def api_ai_insights(request):
             FETCH FIRST 6 ROWS ONLY
         """
         
-        # 3. Payment modes distribution
         payment_modes_query = """
             SELECT 
                 COALESCE(PAYMENT_MODE, 'UNKNOWN') AS MODE,
@@ -1699,7 +1543,6 @@ def api_ai_insights(request):
             FETCH FIRST 5 ROWS ONLY
         """
         
-        # 4. Top paying patients
         top_patients_query = """
             SELECT 
                 p.UID,
@@ -1712,7 +1555,6 @@ def api_ai_insights(request):
             FETCH FIRST 10 ROWS ONLY
         """
         
-        # 5. Patient counts
         patient_stats_query = """
             SELECT 
                 COUNT(DISTINCT UID) AS TOTAL_PATIENTS,
@@ -1720,7 +1562,6 @@ def api_ai_insights(request):
             FROM PATIENT_DATA
         """
         
-        # Execute all queries in parallel
         queries = [
             total_revenue_query,
             total_collected_query,
@@ -1742,7 +1583,6 @@ def api_ai_insights(request):
                 "confidence_score": 0.0
             })
         
-        # Parse collected data
         total_revenue = results[0][0]['TOTAL_REVENUE'] if results[0] else 0
         total_collected = results[1][0]['TOTAL_COLLECTED'] if len(results) > 1 and results[1] else 0
         total_outstanding = results[2][0]['TOTAL_OUTSTANDING'] if len(results) > 2 and results[2] else 0
@@ -1754,7 +1594,6 @@ def api_ai_insights(request):
         top_patients = results[7] if len(results) > 7 else []
         patient_stats = results[8][0] if len(results) > 8 and results[8] else {}
         
-        # Build structured context for Groq
         context = {
             "timeframe": "Last 6 months",
             "currency": "INR",
@@ -1794,7 +1633,6 @@ def api_ai_insights(request):
             }
         }
         
-        # Construct the prompt
         prompt = f"""You are a financial analyst for a hospital billing system called HealthLedger.
 
 Analyze the following financial and operational data and provide a concise summary with key insights:
@@ -1828,7 +1666,6 @@ Analyze the following financial and operational data and provide a concise summa
 
 Format your response as plain text with clear sections."""
 
-        # Call Groq API
         headers = {
             'Authorization': f'Bearer {groq_api_key}',
             'Content-Type': 'application/json'
@@ -1861,10 +1698,8 @@ Format your response as plain text with clear sections."""
             response.raise_for_status()
             groq_response = response.json()
             
-            # Extract insights text
             insights_text = groq_response['choices'][0]['message']['content']
             
-            # Parse highlights from the response
             highlights = []
             lines = insights_text.split('\n')
             for line in lines:
@@ -1874,10 +1709,8 @@ Format your response as plain text with clear sections."""
                 elif line.startswith(tuple(str(i) + '.' for i in range(1, 10))):
                     highlights.append(line.split('.', 1)[1].strip())
             
-            # Limit highlights to 5
             highlights = highlights[:5]
             
-            # Generate a simple confidence score based on data completeness
             confidence_score = 0.7  # Base confidence
             if len(monthly_data) >= 6:
                 confidence_score += 0.1
@@ -1888,7 +1721,6 @@ Format your response as plain text with clear sections."""
             
             confidence_score = min(confidence_score, 1.0)
             
-            # Build response
             response_data = {
                 'insights_text': insights_text,
                 'highlights': highlights,
@@ -1900,7 +1732,6 @@ Format your response as plain text with clear sections."""
                 }
             }
             
-            # Include raw response only for admin users (check user flag)
             auth_token = request.COOKIES.get('auth_token')
             if auth_token and request.session.get(f'{auth_token}_user_type') == 'S':
                 response_data['raw_model_response'] = groq_response
@@ -1908,7 +1739,6 @@ Format your response as plain text with clear sections."""
             return JsonResponse(response_data)
             
         except requests.exceptions.RequestException as e:
-            # Groq API call failed - return fallback insights
             return JsonResponse({
                 "insights_text": f"AI insights temporarily unavailable. Based on available data: Total revenue is ₹{context['financial_summary']['total_revenue']:,.2f} with ₹{context['financial_summary']['total_outstanding']:,.2f} outstanding. System serving {context['patient_stats']['total_patients']} patients with {context['financial_summary']['total_invoices']} invoices.",
                 "highlights": [
@@ -1930,23 +1760,14 @@ Format your response as plain text with clear sections."""
 
 @csrf_exempt
 def api_generate_report(request):
-    """
-    Generate and return a PDF report containing selected analytics sections.
-    Uses ReportLab for server-side PDF generation (pure Python, no DLL dependencies).
-    
-    Security: Only authenticated users can generate reports.
-    Endpoint: /api/generate_report/
-    """
     if request.method != 'POST':
         return JsonResponse({"error": "Method not allowed"}, status=405)
     
-    # Check authentication
     auth_token = request.COOKIES.get('auth_token')
     if not auth_token or not request.session.get(f'{auth_token}_is_authenticated'):
         return JsonResponse({"error": "Unauthorized"}, status=401)
     
     try:
-        # Parse request body
         try:
             body = json.loads(request.body)
         except json.JSONDecodeError:
@@ -1958,28 +1779,22 @@ def api_generate_report(request):
         if not sections:
             return JsonResponse({"error": "No sections selected"}, status=400)
         
-        # Collect data for selected sections
         report_data = {
             'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'orientation': orientation,
             'sections': {}
         }
         
-        # Map section IDs to data fetching functions
         if 'kpi-section' in sections:
-            # Total Revenue from patient invoices
             total_revenue_query = """
                 SELECT COALESCE(SUM(AMOUNT), 0) AS TOTAL_REVENUE
                 FROM PATIENT_DATA
             """
             
-            # Total Collected from payment logs
             total_collected_query = """
                 SELECT COALESCE(SUM(PAID_AMOUNT_ON_DATE), 0) AS TOTAL_COLLECTED
                 FROM INVOICE_LOGS
-            """
-            
-            # Outstanding = Total invoiced - Total paid (grouped by invoice to avoid double counting)
+            """            
             outstanding_query = """
                 SELECT COALESCE(SUM(p.AMOUNT) - SUM(COALESCE(il.TOTAL_PAID, 0)), 0) AS OUTSTANDING
                 FROM PATIENT_DATA p
@@ -1990,13 +1805,11 @@ def api_generate_report(request):
                 ) il ON p.INNVOCE_NUM = il.INVOICE_NUMBER
             """
             
-            # Total Patients count
             patient_count_query = """
                 SELECT COUNT(DISTINCT UID) AS TOTAL_PATIENTS
                 FROM PATIENT_DATA
             """
             
-            # Execute all queries
             success1, revenue_result = DB2Query.runSelectQuery(total_revenue_query)
             success2, collected_result = DB2Query.runSelectQuery(total_collected_query)
             success3, outstanding_result = DB2Query.runSelectQuery(outstanding_query)
@@ -2028,7 +1841,6 @@ def api_generate_report(request):
                 ]
         
         if 'payment-modes-section' in sections:
-            # Fetch payment modes (case-insensitive grouping)
             query = """
                 SELECT 
                     UPPER(COALESCE(PAYMENT_MODE, 'UNKNOWN')) AS MODE,
@@ -2127,7 +1939,7 @@ def api_generate_report(request):
                 report_data['sections']['patients_list'] = [
                     {
                         'uid': row['UID'],
-                        'username': row['USERNAME'],  # FIXED: Changed from 'name' to 'username'
+                        'username': row['USERNAME'],
                         'invoice_num': row['INNVOCE_NUM'],
                         'date': str(row['DATE']),
                         'amount': float(row['AMOUNT']),
@@ -2140,18 +1952,15 @@ def api_generate_report(request):
             else:
                 print(f"DEBUG: Failed to fetch patients - success={success}, result={result}")  # Debug log
         
-        # Generate PDF using ReportLab
         try:
             pdf_bytes = generate_reportlab_pdf(report_data, sections, orientation)
             
-            # Verify PDF is valid
             if len(pdf_bytes) == 0:
                 raise Exception("Generated PDF is empty")
             
             if not pdf_bytes.startswith(b'%PDF'):
                 raise Exception("Generated file is not a valid PDF")
             
-            # Return PDF
             response = HttpResponse(pdf_bytes, content_type='application/pdf')
             response['Content-Disposition'] = f'attachment; filename="HealthLedger_Report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf"'
             response['Content-Length'] = len(pdf_bytes)
@@ -2177,16 +1986,13 @@ def api_generate_report(request):
             "error": f"Error generating report: {str(e)}"
         }, status=500)
 
-
 def generate_reportlab_pdf(report_data, sections, orientation):
     buffer = BytesIO()
 
-    # Set page size based on orientation
     pagesize = landscape(A4) if orientation == 'landscape' else A4
     page_width = pagesize[0]
     page_height = pagesize[1]
 
-    # Create PDF document with minimal margins
     doc = SimpleDocTemplate(
         buffer,
         pagesize=pagesize,
@@ -2196,13 +2002,10 @@ def generate_reportlab_pdf(report_data, sections, orientation):
         bottomMargin=0.5*inch
     )
 
-    # Calculate usable width
     usable_width = page_width - 1*inch  # Total width minus margins
 
-    # Container for PDF elements
     story = []
 
-    # Define styles with Times New Roman
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
         'CustomTitle',
@@ -2246,7 +2049,6 @@ def generate_reportlab_pdf(report_data, sections, orientation):
         leading=10
     )
 
-    # Modern Title Header with colored background - compact
     header_data = [[Paragraph("HealthLedger Analytics Report", title_style)],
                     [Paragraph(f"Generated: {report_data['generated_at']}", subtitle_style)]]
     header_table = Table(header_data, colWidths=[usable_width])
@@ -2261,12 +2063,10 @@ def generate_reportlab_pdf(report_data, sections, orientation):
     story.append(header_table)
     story.append(Spacer(1, 0.15*inch))
 
-    # KPI Section - Compact modern cards
     if 'kpi-section' in sections and 'kpi' in report_data['sections']:
         kpi = report_data['sections']['kpi']
         story.append(Paragraph("Key Performance Indicators", heading_style))
 
-        # Create compact KPI cards using full width
         col_width = usable_width / 4
         kpi_cards = [
             ['Total Revenue', 'Collected Payments', 'Outstanding Balance', 'Total Patients'],
@@ -2276,7 +2076,6 @@ def generate_reportlab_pdf(report_data, sections, orientation):
 
         kpi_table = Table(kpi_cards, colWidths=[col_width]*4)
         kpi_table.setStyle(TableStyle([
-            # Header row
             ('BACKGROUND', (0, 0), (0, 0), colors.HexColor('#3b82f6')),
             ('BACKGROUND', (1, 0), (1, 0), colors.HexColor('#10b981')),
             ('BACKGROUND', (2, 0), (2, 0), colors.HexColor('#f59e0b')),
@@ -2288,7 +2087,6 @@ def generate_reportlab_pdf(report_data, sections, orientation):
             ('TOPPADDING', (0, 0), (3, 0), 6),
             ('BOTTOMPADDING', (0, 0), (3, 0), 6),
 
-            # Values row
             ('BACKGROUND', (0, 1), (0, 1), colors.HexColor('#dbeafe')),
             ('BACKGROUND', (1, 1), (1, 1), colors.HexColor('#d1fae5')),
             ('BACKGROUND', (2, 1), (2, 1), colors.HexColor('#fef3c7')),
@@ -2300,14 +2098,12 @@ def generate_reportlab_pdf(report_data, sections, orientation):
             ('TOPPADDING', (0, 1), (3, 1), 8),
             ('BOTTOMPADDING', (0, 1), (3, 1), 8),
 
-            # Grid
             ('GRID', (0, 0), (-1, -1), 1.5, colors.white),
         ]))
 
         story.append(kpi_table)
         story.append(Spacer(1, 0.15*inch))
 
-    # Revenue Trend Section - With Bar Chart side-by-side with table
     if 'revenue-trend-section' in sections and 'revenue_trend' in report_data['sections']:
         story.append(Paragraph("Monthly Revenue Trend", heading_style))
 
@@ -2355,7 +2151,6 @@ def generate_reportlab_pdf(report_data, sections, orientation):
             story.append(trend_table)
         story.append(Spacer(1, 0.15*inch))
 
-    # Payment Modes Section - Compact with Pie Chart
     if 'payment-modes-section' in sections and 'payment_modes' in report_data['sections']:
         story.append(Paragraph("Payment Mode Distribution", heading_style))
 
@@ -2414,7 +2209,6 @@ def generate_reportlab_pdf(report_data, sections, orientation):
             story.append(payment_table)
         story.append(Spacer(1, 0.15*inch))
 
-    # Top Patients Section - Compact full-width table
     if 'top-patients-section' in sections and 'top_patients' in report_data['sections']:
         story.append(Paragraph("Top 10 Paying Patients", heading_style))
 
@@ -2446,7 +2240,6 @@ def generate_reportlab_pdf(report_data, sections, orientation):
         story.append(patients_table)
         story.append(Spacer(1, 0.15*inch))
 
-    # Invoice Volume Section - Compact
     if 'invoice-volume-section' in sections and 'invoice_volume' in report_data['sections']:
         story.append(Paragraph("Invoice Volume Trend", heading_style))
 
@@ -2474,7 +2267,6 @@ def generate_reportlab_pdf(report_data, sections, orientation):
         story.append(volume_table)
         story.append(Spacer(1, 0.15*inch))
 
-    # Activity Logs Section - Compact full width
     if 'activity-logs-section' in sections and 'activity_logs' in report_data['sections']:
         story.append(Paragraph("Recent System Activity", heading_style))
 
@@ -2506,7 +2298,6 @@ def generate_reportlab_pdf(report_data, sections, orientation):
         story.append(activity_table)
         story.append(Spacer(1, 0.15*inch))
 
-    # Patients List Section - Compact full width
     if 'patients-list-section' in sections and 'patients_list' in report_data['sections']:
         story.append(Paragraph("All Patients List", heading_style))
 
@@ -2548,8 +2339,6 @@ def generate_reportlab_pdf(report_data, sections, orientation):
         story.append(list_table)
         story.append(Spacer(1, 0.1*inch))
 
-    # AI Insights Section - fetch from local API and render
-    # if 'ai-insights-section' in sections:
     if True:
         story.append(Paragraph("AI Insights", heading_style))
         ai_paragraphs_added = False
@@ -2574,21 +2363,16 @@ def generate_reportlab_pdf(report_data, sections, orientation):
                     highlights = [str(highlights).replace('₹', 'Rs.').replace('✓', 'OK').replace('✗', 'X').replace('**', '')]
 
                 print(f"DEBUG: AI Insights fetched - {insights_text}")  # Debug log
-                # Render insights text (split by double newlines for paragraphs)
                 if insights_text:
                     for part in insights_text.split('\n\n'):
-                        # Keep line breaks inside paragraph
                         part_safe = part.replace('\n', '<br/>')
                         story.append(Paragraph(part_safe, normal_style))
                         story.append(Spacer(1, 0.08*inch))
                     ai_paragraphs_added = True
 
-                # Render highlights as a compact table / list
                 if highlights:
-                    # Render highlights as a simple paragraph list (bulleted, compact)
                     safe_lines = []
                     for h in highlights:
-                        # basic HTML-escape and truncate to keep layout tidy
                         s = str(h).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('\n', ' ')
                         if len(s) > 280:
                             s = s[:277] + '...'
@@ -2598,7 +2382,6 @@ def generate_reportlab_pdf(report_data, sections, orientation):
                     story.append(Spacer(1, 0.08*inch))
                     ai_paragraphs_added = True
 
-                # Render confidence and references in a small table
                 ref_data = [
                     ['Confidence', 'Total Invoices', 'Months Analyzed', 'Payment Modes']
                 ]
@@ -2628,12 +2411,10 @@ def generate_reportlab_pdf(report_data, sections, orientation):
             story.append(Paragraph("AI Insights: Failed to fetch insights from the AI service.", normal_style))
             story.append(Spacer(1, 0.08*inch))
 
-        # If nothing added, add a placeholder note
         if not ai_paragraphs_added:
             story.append(Paragraph("AI Insights are unavailable.", small_style))
             story.append(Spacer(1, 0.08*inch))
 
-    # Compact Footer
     footer_style = ParagraphStyle(
         'Footer',
         parent=styles['Normal'],
@@ -2648,23 +2429,14 @@ def generate_reportlab_pdf(report_data, sections, orientation):
         footer_style
     ))
 
-    # Build PDF
     doc.build(story)
 
-    # Get PDF bytes
     pdf_bytes = buffer.getvalue()
     buffer.close()
 
     return pdf_bytes
-    
 
-# ===================================================== ANALYTICS VIEWS
-
-# ===================================================== API VIEWS
-
-# New API endpoints for CREATE form enhancements
 def api_get_all_uids(request):
-    """Get all unique UIDs with their usernames from AUTHENTICATION table"""
     query = """
         SELECT DISTINCT UID, NAME, EMAIL 
         FROM AUTHENTICATION 
@@ -2688,7 +2460,6 @@ def api_get_all_uids(request):
     return JsonResponse(users, safe=False)
 
 def api_generate_invoice_number(request):
-    """Generate a unique invoice number based on existing invoices"""
     query = """
         SELECT INNVOCE_NUM 
         FROM patient_data 
@@ -2698,11 +2469,9 @@ def api_generate_invoice_number(request):
     success, result = DB2Query.runSelectQuery(query)
     
     if not success or not result:
-        # If no invoices exist, start with INV00000001
         new_invoice_num = "INV00000001"
     else:
         last_invoice = result[0].get("INNVOCE_NUM", "INV00000000")
-        # Extract the numeric part and increment
         try:
             num_part = int(last_invoice.replace("INV", ""))
             new_num = num_part + 1
@@ -2713,7 +2482,6 @@ def api_generate_invoice_number(request):
     return JsonResponse({"invoice_number": new_invoice_num})
 
 def api_get_user_by_uid(request):
-    """Get user details by UID"""
     uid = request.GET.get('uid')
     if not uid:
         return JsonResponse({"error": "UID is required"}, status=400)
@@ -2737,12 +2505,7 @@ def api_get_user_by_uid(request):
     
     return JsonResponse(user_data)
 
-
 def api_auth_stats(request):
-    """Return statistics about AUTHENTICATION table:
-    - total_users
-    - domain_counts (common domains and 'others')
-    """
     try:
         ok, res = DB2Query.runSelectQuery("SELECT EMAIL FROM AUTHENTICATION WHERE EMAIL IS NOT NULL")
         if not ok:
@@ -2762,7 +2525,6 @@ def api_auth_stats(request):
                 domain = parts[1] if len(parts) > 1 else 'unknown'
                 domain_counts[domain] = domain_counts.get(domain, 0) + 1
 
-        # prepare response with common domains and others
         resp = {'total_users': total, 'domains': {}}
         counted = 0
         for d in common:
@@ -2770,10 +2532,8 @@ def api_auth_stats(request):
             resp['domains'][d] = c
             counted += c
 
-        # remaining domains as others
         resp['domains']['others'] = max(0, total - counted)
 
-        # include top 5 domains for reference
         top_domains = sorted(domain_counts.items(), key=lambda x: x[1], reverse=True)[:5]
         resp['top_domains'] = [{ 'domain': d, 'count': c } for d,c in top_domains]
 
@@ -2781,16 +2541,7 @@ def api_auth_stats(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
-
-def REGISTER(request):
-    """Render the patient registration page."""
-    return render(request, 'src/management/REGISTER.html')
-
-
 def api_generate_uid(request):
-    """Generate a new unique UID. Format: U######## (8 digit numeric part)
-    This inspects existing UIDs and returns next sequence.
-    """
     try:
         ok, res = DB2Query.runSelectQuery("SELECT UID FROM AUTHENTICATION WHERE UID IS NOT NULL")
         prefixes = {}
@@ -2807,12 +2558,9 @@ def api_generate_uid(request):
                     else:
                         if num > prefixes[pfx]['max']:
                             prefixes[pfx]['max'] = num
-                        # keep the max width seen
                         prefixes[pfx]['width'] = max(prefixes[pfx]['width'], width)
 
-        # Choose prefix: prefer most common prefix (by count) or fallback to 'ABC'
         if prefixes:
-            # determine counts per prefix to pick most common
             counts = {}
             for row in res:
                 uid = (row.get('UID') or '').strip()
@@ -2820,7 +2568,6 @@ def api_generate_uid(request):
                 if m:
                     pfx = m.group(1).upper()
                     counts[pfx] = counts.get(pfx, 0) + 1
-            # pick prefix with highest count
             chosen = max(counts.items(), key=lambda x: x[1])[0]
             info = prefixes.get(chosen)
             max_num = info['max']
@@ -2828,14 +2575,11 @@ def api_generate_uid(request):
             new_num = max_num + 1
             new_uid = f"{chosen}{new_num:0{width}d}"
         else:
-            # No matching pattern found; start with ABC001
             new_uid = 'ABC001'
 
-        # ensure uniqueness (very unlikely collision) by incrementing
         exists_ok, exists_res = DB2Query.runSelectQuery(f"SELECT UID FROM AUTHENTICATION WHERE UID = '{new_uid}' FETCH FIRST 1 ROW ONLY")
         attempts = 0
         while exists_ok and exists_res and attempts < 1000:
-            # increment numeric suffix
             m = re.match(r"^([A-Za-z]+)(\d+)$", new_uid)
             if not m:
                 new_uid = 'ABC001'
@@ -2851,15 +2595,8 @@ def api_generate_uid(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
-
 @csrf_exempt
 def api_register_user(request):
-    """Register a new patient (staff-facing API).
-
-    Expects POST with JSON or form fields: name, email
-    Generates UID and a unique 4-digit password and inserts into AUTHENTICATION
-    Returns: { success: True, uid: 'U00000001', pdf_url: '/api/registration_pdf/U00000001' }
-    """
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST allowed'}, status=405)
 
@@ -2875,17 +2612,14 @@ def api_register_user(request):
         if not name or not email:
             return JsonResponse({'error': 'name and email are required'}, status=400)
 
-        # sanitize
         name_s = name.replace("'", "''")
         email_s = email.replace("'", "''")
 
-        # Check for duplicate email first
         check_q = f"SELECT EMAIL FROM AUTHENTICATION WHERE EMAIL = '{email_s}' FETCH FIRST 1 ROW ONLY"
         okc, crec = DB2Query.runSelectQuery(check_q)
         if okc and crec:
             return JsonResponse({'error': 'Email already registered'}, status=400)
 
-        # Generate UID (try multiple times in case of race/duplicate)
         new_uid = None
         for attempt in range(10):
             uid_resp = api_generate_uid(request)
@@ -2895,21 +2629,17 @@ def api_register_user(request):
             else:
                 cand = 'ABC001'
 
-            # verify uniqueness
             exists_q = f"SELECT UID FROM AUTHENTICATION WHERE UID = '{cand}' FETCH FIRST 1 ROW ONLY"
             okx, rx = DB2Query.runSelectQuery(exists_q)
             if not okx:
-                # if query failed, continue to next attempt
                 continue
             if not rx:
                 new_uid = cand
                 break
-            # otherwise try again (loop will continue)
 
         if not new_uid:
             return JsonResponse({'error': 'Unable to generate unique UID, try again'}, status=500)
 
-        # Ensure password uniqueness - 4 digit numeric
         ok, pass_res = DB2Query.runSelectQuery("SELECT PASSWORD FROM AUTHENTICATION WHERE PASSWORD IS NOT NULL")
         existing_passwords = set()
         if ok and pass_res:
@@ -2939,13 +2669,10 @@ def api_register_user(request):
         )
 
         success, msg = DB2Query.runQuery(insert_sql)
-        # If insert failed due to duplicate key (race), retry a few times
         if not success:
             if isinstance(msg, str) and ('SQL0803N' in msg or 'SQLCODE=-803' in msg or '23505' in msg):
-                # try to regenerate UID and insert again a few times
                 retried = False
                 for attempt in range(5):
-                    # generate another candidate
                     uid_resp = api_generate_uid(request)
                     if isinstance(uid_resp, JsonResponse):
                         data = json.loads(uid_resp.content)
@@ -2954,13 +2681,11 @@ def api_register_user(request):
                         cand = None
                     if not cand:
                         continue
-                    # check exists
                     okx, rx = DB2Query.runSelectQuery(f"SELECT UID FROM AUTHENTICATION WHERE UID = '{cand}' FETCH FIRST 1 ROW ONLY")
                     if not okx:
                         continue
                     if rx:
                         continue
-                    # try insert
                     insert_sql = (
                         "INSERT INTO AUTHENTICATION (UID, NAME, EMAIL, PASSWORD, FLAG, KEY) "
                         f"VALUES ('{cand}', '{name_s}', '{email_s}', '{password}', '{flag}', '{key}')"
@@ -2977,7 +2702,6 @@ def api_register_user(request):
             else:
                 return JsonResponse({'error': f'Failed to insert user: {msg}'}, status=500)
 
-        # Log activity
         ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         log_q = (
             "INSERT INTO activity (log_name, log_desc, log_date_time) "
@@ -2992,9 +2716,7 @@ def api_register_user(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
-
 def registration_pdf(request, uid):
-    """Generate a PDF containing the registration info for printing."""
     if not uid:
         return JsonResponse({'error': 'UID required'}, status=400)
 
@@ -3004,7 +2726,6 @@ def registration_pdf(request, uid):
         return JsonResponse({'error': 'User not found'}, status=404)
 
     user = res[0]
-    # Build PDF using reportlab
     buffer = BytesIO()
     from reportlab.lib.pagesizes import A4
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
@@ -3038,3 +2759,5 @@ def registration_pdf(request, uid):
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename=registration_{uid}.pdf'
     return response
+
+# ===================================================== API VIEWS =====================================================
