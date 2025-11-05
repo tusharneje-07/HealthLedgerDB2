@@ -12,3 +12,6 @@ __pycache__/
 *db.sqlite3
 
 demo
+
+test_mail.py
+test.html

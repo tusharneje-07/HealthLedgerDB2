@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect
 from django.http import JsonResponse, HttpResponse
 from .DB2 import DB2Query
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import defaultdict
 from django.utils import timezone
 import hashlib, base64
@@ -24,9 +24,16 @@ from reportlab.lib.enums import TA_CENTER
 from reportlab.graphics.shapes import Drawing
 from reportlab.graphics.charts.piecharts import Pie
 from reportlab.graphics.charts.barcharts import VerticalBarChart
+import resend
 
 # Load environment variables
 load_dotenv()
+
+# Configure Resend API
+resend.api_key = os.getenv('RESEND_API_KEY')
+
+# In-memory OTP storage (in production, use Redis or database)
+OTP_STORAGE = {}
 
 
 # ===================================================== HIGH LEVEL VIEWS =====================================================
@@ -2362,7 +2369,6 @@ def generate_reportlab_pdf(report_data, sections, orientation):
                 else:
                     highlights = [str(highlights).replace('₹', 'Rs.').replace('✓', 'OK').replace('✗', 'X').replace('**', '')]
 
-                print(f"DEBUG: AI Insights fetched - {insights_text}")  # Debug log
                 if insights_text:
                     for part in insights_text.split('\n\n'):
                         part_safe = part.replace('\n', '<br/>')
@@ -2759,5 +2765,235 @@ def registration_pdf(request, uid):
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename=registration_{uid}.pdf'
     return response
+
+# ===================================================== PASSWORD RESET VIEWS =====================================================
+
+def user_reset_password(request):
+    return render(request, 'src/user/RESET.html')
+
+def send_otp_email(email, otp_code):
+    try:
+        r = resend.Emails.send({
+            "from": "healthledger@acadx.xyz",
+            "to": email,
+            "subject": "HealthLedger - Password Reset Code",
+            "html": f"""
+<!doctype html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="color-scheme" content="dark only">
+  <meta name="supported-color-schemes" content="dark">
+  <title>HealthLedger OTP</title>
+  <style>
+    .preheader {{ display:none!important; visibility:hidden; opacity:0; color:transparent; height:0; width:0; overflow:hidden; mso-hide:all; }}
+    .btn:hover {{ filter:brightness(1.15); }}
+    @media (max-width:600px){{
+      .container {{ width:100%!important; }}
+      .otp {{ font-size:28px!important; letter-spacing:8px!important; }}
+    }}
+  </style>
+</head>
+<body style="margin:0; padding:0; background:#0b0f16; color:#e5e7eb;">
+  <span class="preheader">Your HealthLedger one-time passcode: {otp_code} (valid for 10 minutes)</span>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0b0f16;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" class="container"
+               style="width:600px; max-width:600px; background:#111827; border-radius:16px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.35);">
+          <tr>
+            <td align="center" style="padding:32px 24px 12px 24px;">
+              <img src="https://i.ibb.co/rRgdJQR4/logo.png" alt="HealthLedger"
+                   style="display:block; margin:0 auto 8px auto; border:0; outline:none; text-decoration:none; max-width:250px;">
+            </td>
+          </tr>
+
+          <tr>
+            <td align="center" style="padding:0 24px 4px 24px; font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+              <h1 style="margin:0; font-size:22px; line-height:1.4; font-weight:700; color:#f9fafb;">
+                Password Reset Code
+              </h1>
+              <p style="margin:8px 0 0 0; font-size:14px; color:#cbd5e1;">
+                Use this code to reset your password for <strong>HealthLedger</strong>.
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td align="center" style="padding:20px 24px 8px 24px;">
+              <div class="otp"
+                   style="display:inline-block; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+                          font-size:34px; letter-spacing:10px; color:#ffffff;
+                          background:#0b1220; border:1px solid #1f2937; border-radius:12px;
+                          padding:16px 24px; text-align:center;">
+                {otp_code}
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td align="center" style="padding:0 24px 24px 24px; font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+              <p style="margin:12px 0 0 0; font-size:13px; color:#9ca3af;">
+                This code expires in <strong>10 minutes</strong> and can be used only once.
+              </p>
+              <p style="margin:6px 0 0 0; font-size:12px; color:#6b7280;">
+                Didn't request this? You can safely ignore this email.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <!--[if mso]>
+  <style type="text/css">
+    .otp {{ letter-spacing: 10px !important; }}
+  </style>
+  <![endif]-->
+</body>
+</html>
+            """
+        })
+        return True
+    except Exception as e:
+        print(f"Error sending email: {e}")
+        return False
+
+@csrf_exempt
+def api_send_reset_otp(request):
+    
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Method not allowed'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        
+        email = data.get('email', '').strip().lower()
+        
+        if not email:
+            return JsonResponse({'success': False, 'message': 'Email is required'}, status=400)
+        
+        # Check if user exists (P = Patient user)
+        query = f"SELECT UID, EMAIL FROM AUTHENTICATION WHERE LOWER(EMAIL) = '{email}' AND FLAG = 'P'"
+        success, result = DB2Query.runSelectQuery(query)
+        
+        if not success or not result:
+            return JsonResponse({'success': False, 'message': 'No account found with this email'}, status=404)
+        
+        # Generate 6-digit OTP
+        otp_code = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+        # Store OTP with expiry time (10 minutes)
+        expiry_time = datetime.now() + timedelta(minutes=10)
+        OTP_STORAGE[email] = {
+            'otp': otp_code,
+            'expiry': expiry_time,
+            'verified': False
+        }
+        
+        # Send OTP email
+        if send_otp_email(email, otp_code):
+            return JsonResponse({'success': True, 'message': 'OTP sent successfully'})
+        else:
+            return JsonResponse({'success': False, 'message': 'Failed to send email'}, status=500)
+            
+    except json.JSONDecodeError as e:
+        return JsonResponse({'success': False, 'message': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'message': 'Server error'}, status=500)
+    finally:
+        print("="*80)
+
+@csrf_exempt
+def api_verify_reset_otp(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Method not allowed'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        
+        email = data.get('email', '').strip().lower()
+        otp = data.get('otp', '').strip()
+        
+        if not email or not otp:
+            return JsonResponse({'success': False, 'message': 'Email and OTP are required'}, status=400)
+    
+        # Check if OTP exists
+        if email not in OTP_STORAGE:
+            return JsonResponse({'success': False, 'message': 'No OTP found for this email'}, status=404)
+        
+        otp_data = OTP_STORAGE[email]
+        
+        # Check if OTP is expired
+        if datetime.now() > otp_data['expiry']:
+            del OTP_STORAGE[email]
+            return JsonResponse({'success': False, 'message': 'OTP has expired'}, status=400)
+        
+        # Verify OTP
+        if otp_data['otp'] != otp:
+            return JsonResponse({'success': False, 'message': 'Invalid OTP'}, status=400)
+        
+        # Mark OTP as verified
+        OTP_STORAGE[email]['verified'] = True
+        
+        return JsonResponse({'success': True, 'message': 'OTP verified successfully'})
+        
+    except json.JSONDecodeError as e:
+        return JsonResponse({'success': False, 'message': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'message': 'Server error'}, status=500)
+    finally:
+        print("="*80)
+
+@csrf_exempt
+def api_reset_password(request):
+    
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Method not allowed'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        
+        email = data.get('email', '').strip().lower()
+        new_password = data.get('new_password', '')
+        
+        if not email or not new_password:
+            return JsonResponse({'success': False, 'message': 'Email and password are required'}, status=400)
+        
+        if email not in OTP_STORAGE or not OTP_STORAGE[email].get('verified', False):
+
+            return JsonResponse({'success': False, 'message': 'OTP not verified'}, status=400)
+        
+        if datetime.now() > OTP_STORAGE[email]['expiry']:
+            del OTP_STORAGE[email]
+            return JsonResponse({'success': False, 'message': 'OTP has expired'}, status=400)
+        
+        query = f"UPDATE AUTHENTICATION SET PASSWORD = '{new_password}' WHERE LOWER(EMAIL) = '{email}' AND FLAG = 'P'"
+        success, result = DB2Query.runQuery(query)
+        
+        if not success:
+            return JsonResponse({'success': False, 'message': 'Failed to update password'}, status=500)
+        
+        # Clear OTP from storage
+        del OTP_STORAGE[email]
+        
+        return JsonResponse({'success': True, 'message': 'Password reset successfully'})
+        
+    except json.JSONDecodeError as e:
+        return JsonResponse({'success': False, 'message': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'message': 'Server error'}, status=500)
+    finally:
+        print("="*80)
 
 # ===================================================== API VIEWS =====================================================

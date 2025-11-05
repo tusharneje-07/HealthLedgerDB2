@@ -19,6 +19,16 @@ from django.urls import path
 from . import views
 from django.http import HttpResponse
 
+# Debug: Print to verify module loading
+print("="*80)
+print("DEBUG: urls.py is being loaded")
+print(f"DEBUG: Checking if password reset views exist:")
+print(f"  - api_send_reset_otp: {hasattr(views, 'api_send_reset_otp')}")
+print(f"  - api_verify_reset_otp: {hasattr(views, 'api_verify_reset_otp')}")
+print(f"  - api_reset_password: {hasattr(views, 'api_reset_password')}")
+print(f"  - user_reset_password: {hasattr(views, 'user_reset_password')}")
+print("="*80)
+
 urlpatterns = [
     
     # MANAGEMENT SECTION - High Level
@@ -39,6 +49,7 @@ urlpatterns = [
     path('login/patient/', views.user_login, name='user_login'),                   # Patient login page
     path('user/<str:user_email>/', views.user_dashboard, name='user_dashboard'),  # Patient dashboard
     path('user/<str:user_email>/invoices/', views.user_invoices, name='user_invoices'),  # Patient invoices page
+    path('reset-password/', views.user_reset_password, name='user_reset_password'),  # Password reset page
     
     
     # COMMON APIS
@@ -83,6 +94,11 @@ urlpatterns = [
     path('api/user/stats/<str:user_email>/', views.user_stats, name='user_stats'),                   # Get user statistics
     path('api/user/payment/<str:amount>/', views.user_payment, name='api_user_payment'),             # User payment endpoint (deprecated)
     
+    # PASSWORD RESET APIS
+    path('api/reset-password/send-otp/', views.api_send_reset_otp, name='api_send_reset_otp'),       # Send OTP for password reset
+    path('api/reset-password/verify-otp/', views.api_verify_reset_otp, name='api_verify_reset_otp'), # Verify OTP
+    path('api/reset-password/reset/', views.api_reset_password, name='api_reset_password'),          # Reset password
+    
     
     # ========================================
     # UTILITY ROUTES
@@ -90,3 +106,10 @@ urlpatterns = [
     path('.well-known/appspecific/com.chrome.devtools.json', lambda r: HttpResponse('{}', content_type='application/json')),  # Chrome DevTools
     path('favicon.ico', lambda r: HttpResponse('{}', content_type='application/json')),              # Favicon handler
 ]
+
+# Debug: Print all registered URL patterns
+print("="*80)
+print("DEBUG: Registered URL patterns:")
+for pattern in urlpatterns:
+    print(f"  - {pattern.pattern}")
+print("="*80)
