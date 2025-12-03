@@ -1,7 +1,4 @@
 # Complete DB2 SQL Queries Explanation
-
-This document explains **every unique SQL query** found in your Python code in **simple English**. Each query is explained word-by-word so you can understand what it does.
-
 ---
 
 ## Table of Contents
@@ -1120,7 +1117,7 @@ WHERE EMAIL = '{email}'
 
 ---
 
-## Tables in Your Database
+## Tables in Database
 
 1. **patient_data**: Main table with patient invoices
    - REC_NUMBER, UID, USERNAME, INNVOCE_NUM, DATE, AMOUNT

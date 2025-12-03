@@ -1,6 +1,7 @@
 import random
 import datetime
 import DB2.DB2Query as DB2Query
+import hashlib
 
 # Lists of 50 Indian first and last names
 first_names = [
@@ -62,7 +63,8 @@ for i in range(starting_number, starting_number + 500):
     uid = f"ABC{i:03d}"
     username = random_username()
     email = generate_email(username)
-    password = "123"
+    password = str(random.randint(1000, 9999)) + "XYZ_SALT"
+    password = hashlib.sha256(password.encode()).hexdigest()
     invoice_num = f"INV{i:08d}"
     date = random_date()
     amount = round(random.uniform(100, 10000), 0)
@@ -72,29 +74,29 @@ for i in range(starting_number, starting_number + 500):
         INSERT INTO AUTHENTICATION (UID, NAME, EMAIL, PASSWORD, FLAG, KEY)
         VALUES ('{uid}', '{username}', '{email}', '{password}', 'P', NULL);
     """
-    print(authentication_sql)
-    # a, b = DB2Query.runQuery(authentication_sql)
+    a, b = DB2Query.runQuery(authentication_sql)
     if not a:
         print("ERROR inserting into AUTHENTICATION:", b)
-        break
+        continue
 
     patient_data_sql = f"""
         INSERT INTO patient_data (uid, username, innvoce_num, date, amount)
         VALUES ('{uid}', '{username}', '{invoice_num}', '{date}', {amount});
     """
-    # a, b = DB2Query.runQuery(patient_data_sql)
+    a, b = DB2Query.runQuery(patient_data_sql)
     if not a:
         print("ERROR inserting into patient_data:", b)
-        break
+        continue
 
     register_sql = f"""
         INSERT INTO register (uid, innvoce_num, paid_amt)
         VALUES ('{uid}', '{invoice_num}', 0);
     """
-    # a, b = DB2Query.runQuery(register_sql)
+    a, b = DB2Query.runQuery(register_sql)
+    print(register_sql,a,b)
     if not a:
         print("ERROR inserting into register:", b)
-        break
+        continue
 
     print(f"Inserted record {i}")
 

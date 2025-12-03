@@ -8,6 +8,7 @@ dsn_pwd = "2425455"
 dsn_database = "HOSPITAL"
 dsn_port = "25000"
 dsn_protocol = "TCPIP"
+dsn_schema = "NEJET"
 
 dsn = (
     f"DATABASE={dsn_database};"
@@ -22,7 +23,7 @@ def runQuery(query):
     try:
         conn = ibm_db.connect(dsn, "", "")
         ibm_db.autocommit(conn, ibm_db.SQL_AUTOCOMMIT_ON)
-        ibm_db.exec_immediate(conn, "SET CURRENT SCHEMA = NEJET")
+        ibm_db.exec_immediate(conn, f"SET CURRENT SCHEMA = {dsn_schema}")
         stmt = ibm_db.exec_immediate(conn, query)
         ibm_db.close(conn)
         return True, stmt
@@ -30,7 +31,6 @@ def runQuery(query):
         return False, str(e)
 
 def runSelectQuery(query):
-    """Executes SELECT query and returns list of dictionaries"""
     try:
         conn = ibm_db.connect(dsn, "", "")
         ibm_db.autocommit(conn, ibm_db.SQL_AUTOCOMMIT_ON)
@@ -49,7 +49,6 @@ def runSelectQuery(query):
         return False, str(e)
 
 def _execute_single_query(query):
-    """Helper function for parallel execution"""
     return runSelectQuery(query)
 
 def runParallelQueries(queries, max_workers=None):
@@ -57,7 +56,6 @@ def runParallelQueries(queries, max_workers=None):
         return True, []
     
     try:
-        # Use Pool for maximum performance
         with Pool(processes=max_workers) as pool:
             results = pool.map(_execute_single_query, queries)
         
@@ -67,7 +65,6 @@ def runParallelQueries(queries, max_workers=None):
             errors = "; ".join([r[1] for r in failed])
             return False, f"Some queries failed: {errors}"
         
-        # Return list of results (one per query) instead of combined
         return True, [data for success, data in results]
     except Exception as e:
         return False, str(e)

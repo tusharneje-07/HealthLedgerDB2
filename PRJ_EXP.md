@@ -766,12 +766,9 @@ Response:
 
 #### 2. Invoice Management
 
-**Load Paginated Records**
+**Get Data by UID**
 ```http
-GET /api/load_data/?size=50&offset=0&search=ABC001&date_from=2025-01-01&date_to=2025-12-31&status=pending
-
-Headers:
-X-Total-Count: 150
+GET /api/get_data_by_uid?uid=ABC001
 
 Response:
 [
@@ -780,19 +777,55 @@ Response:
         "uid": "ABC001",
         "username": "John Doe",
         "invoiceNum": "INV00000001",
-        "date": "2025-01-15",
-        "amount": 5000.00,
-        "paidAmount": 2000.00,
-        "remainingAmount": 3000.00,
+        "date": "2025-11-05",
+        "amount": 5000.0,
+        "paidAmount": 3500.0,
+        "remainingAmount": 1500.0,
         "remark": "Pending",
-        "detailed_logs": [...]
+        "see_details": "/invoice/INV00000001"
     }
 ]
 ```
 
-**Get Invoice Details**
+**Load Paginated Records**
 ```http
-GET /api/invoice/INV00000001/
+GET /api/records/?size=50&offset=0&search=ABC001&date_from=2025-01-01&date_to=2025-12-31&status=pending
+Alias: GET /api/load_data/ (same endpoint, same parameters)
+
+Headers:
+X-Total-Count: 150
+
+Response:
+[
+    {
+        "REC_NUMBER": 1,
+        "UID": "ABC001",
+        "USERNAME": "John Doe",
+        "INNVOCE_NUM": "INV00000001",
+        "DATE": "2025-01-15",
+        "AMOUNT": 5000.00,
+        "PAID_AMOUNT": 2000.00,
+        "REMAINING_AMOUNT": 3000.00,
+        "REMARK": "Pending"
+    }
+]
+```
+
+**Get Records Count**
+```http
+GET /api/records/count/?search=ABC001&date_from=2025-01-01&date_to=2025-12-31&status=pending
+
+Parameters: Same as /api/records/ endpoint
+
+Response:
+{
+    "count": 150
+}
+```
+
+**Get Data by Invoice ID**
+```http
+GET /api/get_data_by_invoice_id?invoice_num=INV00000001
 
 Response:
 {
@@ -805,10 +838,35 @@ Response:
     "paidAmount": 2000.00,
     "remainingAmount": 3000.00,
     "remark": "Pending",
-    "detailed_logs": [
+    "amountLogs": [
         {
             "date": "2025-01-20",
             "paid_amount_on_date": 2000.00,
+            "log_remark": "Payment via CASH"
+        }
+    ]
+}
+```
+
+**Get Detailed Invoice View**
+```http
+GET /api/invoice/INV00000001/
+
+Response:
+{
+    "recNumber": 1,
+    "uid": "ABC001",
+    "username": "John Doe",
+    "invoiceNum": "INV00000001",
+    "date": "2025-11-05",
+    "amount": 5000.0,
+    "paidAmount": 3500.0,
+    "remainingAmount": 1500.0,
+    "remark": "Pending",
+    "amountLogs": [
+        {
+            "date": "2025-11-10 10:30:00",
+            "paid_amount_on_date": 2000.0,
             "log_remark": "Payment via CASH"
         }
     ]
@@ -829,6 +887,13 @@ Response:
 **Update Payment**
 ```http
 GET /api/update_payment/?uid=ABC001&invoice_num=INV00000001&paid_amount=1500&total_amount=5000&by=mode:CASH|id:null
+
+Parameters:
+- uid: Patient UID (required)
+- invoice_num: Invoice number (required)
+- paid_amount: Amount being paid (required)
+- total_amount: Total invoice amount (optional)
+- by: Payment details in format "mode:<CASH|CARD|RAZ>|id:<payment_id>" (optional, defaults to "mode:cash|id:null")
 
 Response:
 {
@@ -1008,7 +1073,7 @@ Response: PDF file download
 
 **User Invoices**
 ```http
-GET /api/user/invoices/<base64_email>/
+GET /api/user/invoices/<user_email>/
 
 Response:
 [
@@ -1028,7 +1093,7 @@ Response:
 
 **User Statistics**
 ```http
-GET /api/user/stats/<email>/
+GET /api/user/stats/<user_email>/
 
 Response:
 {
@@ -1045,7 +1110,16 @@ Response:
         "this_month": 3000.00,
         "last_month": 5000.00
     },
-    "recent_transactions": [...]
+    "recent_transactions": [
+        {
+            "date": "2025-11-10 10:30:00",
+            "invoice_number": "INV00000001",
+            "paid_amount": 2000.0,
+            "remark": "Payment via CASH",
+            "payment_mode": "CASH",
+            "payment_id": "N/A"
+        }
+    ]
 }
 ```
 
@@ -1068,7 +1142,9 @@ Response:
     "order_id": "order_xyz123",
     "amount": 500000,
     "currency": "INR",
-    "key": "rzp_test_xyz"
+    "key": "rzp_test_xyz",
+    "invoice_num": "INV00000001",
+    "uid": "ABC001"
 }
 ```
 
@@ -1091,7 +1167,8 @@ Response:
     "message": "Payment verified and updated successfully",
     "payment_id": "pay_xyz123",
     "invoice_num": "INV00000001",
-    "amount_paid": 5000.00
+    "amount_paid": 5000.00,
+    "remaining_amount": 0.00
 }
 ```
 

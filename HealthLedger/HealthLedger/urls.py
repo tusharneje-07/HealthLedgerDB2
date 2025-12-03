@@ -19,16 +19,6 @@ from django.urls import path
 from . import views
 from django.http import HttpResponse
 
-# Debug: Print to verify module loading
-print("="*80)
-print("DEBUG: urls.py is being loaded")
-print(f"DEBUG: Checking if password reset views exist:")
-print(f"  - api_send_reset_otp: {hasattr(views, 'api_send_reset_otp')}")
-print(f"  - api_verify_reset_otp: {hasattr(views, 'api_verify_reset_otp')}")
-print(f"  - api_reset_password: {hasattr(views, 'api_reset_password')}")
-print(f"  - user_reset_password: {hasattr(views, 'user_reset_password')}")
-print("="*80)
-
 urlpatterns = [
     
     # MANAGEMENT SECTION - High Level
@@ -78,8 +68,9 @@ urlpatterns = [
     path('api/auth_stats/', views.api_auth_stats, name='api_auth_stats'),                            # Get authentication statistics
     path('api/generate_uid/', views.api_generate_uid, name='api_generate_uid'),                      # Generate new UID for patient
     path('api/register_user/', views.api_register_user, name='api_register_user'),                   # Register new user/patient
-    path('api/registration_pdf/<str:uid>/', views.registration_pdf, name='registration_pdf'),        # Generate registration PDF
+    path('api/registration_pdf/<str:uid>/<str:temp_password>/', views.registration_pdf, name='registration_pdf'),        # Generate registration PDF
     
+    # -- Used in Analystics Dashboard
     path('api/financial_summary/', views.api_financial_summary, name='api_financial_summary'),       # Financial summary data
     path('api/patient_stats/', views.api_patient_stats, name='api_patient_stats'),                   # Patient statistics
     path('api/activity_trends/', views.api_activity_trends, name='api_activity_trends'),             # Activity trends over time
@@ -106,10 +97,3 @@ urlpatterns = [
     path('.well-known/appspecific/com.chrome.devtools.json', lambda r: HttpResponse('{}', content_type='application/json')),  # Chrome DevTools
     path('favicon.ico', lambda r: HttpResponse('{}', content_type='application/json')),              # Favicon handler
 ]
-
-# Debug: Print all registered URL patterns
-print("="*80)
-print("DEBUG: Registered URL patterns:")
-for pattern in urlpatterns:
-    print(f"  - {pattern.pattern}")
-print("="*80)

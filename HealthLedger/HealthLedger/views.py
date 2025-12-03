@@ -143,7 +143,7 @@ def LOGIN(request):
 
     username = request.POST.get('username') or request.POST.get('email')
     password = request.POST.get('password')
-    user_type = request.POST.get('user_type') or 'S'  # Default to 'S' for staff
+    user_type = request.POST.get('user_type') or 'S'
     
     if request.method == 'POST' and request.POST.get('has_token_key'):
         auth_token = request.COOKIES.get('auth_token')
@@ -155,9 +155,9 @@ def LOGIN(request):
         else:
             return render(request, 'src/management/LOGIN.html', {'error':True, 'error_msg': 'Invalid authentication key'})
         
-
     query = f"SELECT UID, NAME, EMAIL, PASSWORD, FLAG FROM AUTHENTICATION WHERE (UID = '{username}' OR EMAIL = '{username}') AND FLAG = '{user_type[0].upper()}'"
     ok, res = DB2Query.runSelectQuery(query)
+    print("Management login attempt:", username, password, user_type, ok,res, query)
     if ok and res:
         user = res[0]
         stored_password = user.get('PASSWORD')
@@ -306,8 +306,14 @@ def user_login(request):
         ok, res = DB2Query.runSelectQuery(query)
         if ok and res:
             user = res[0]
+            
+            user_entered = password + "XYZ_SALT"
+            hashed_password = hashlib.sha256(user_entered.encode()).hexdigest()
+            
+            print("User login attempt:", email, hashed_password, user.get('PASSWORD'))
             stored_password = user.get('PASSWORD')
-            if stored_password == password:
+            
+            if stored_password == hashed_password:
                 auth_token = hashlib.sha256(email.encode()).hexdigest()
                 request.session[f'{auth_token}_user_uid'] = user.get('UID')
                 request.session[f'{auth_token}_user_name'] = user.get('NAME')
@@ -1139,6 +1145,7 @@ def verify_payment(request):
         )
         
         success, msg = DB2Query.runQuery(update_query)
+        print(success, msg,update_query)
         if not success:
             return JsonResponse({"error": "Failed to update payment in database"}, status=500)
         
@@ -1147,7 +1154,8 @@ def verify_payment(request):
             "INSERT INTO activity (log_name, log_desc, log_date_time) "
             f"VALUES ('Razorpay Payment', '{log_desc}', '{current_timestamp}')"
         )
-        DB2Query.runQuery(insert_activity_query)
+        success, msg = DB2Query.runQuery(insert_activity_query)
+        print(success, msg, insert_activity_query)
         log_remark = f"Payment updated of {invoice_num}, ₹{paid_amount}/- Paid via RAZ (Payment ID: {razorpay_payment_id})"
         insert_invoice_query = (
             "INSERT INTO INVOICE_LOGS "
@@ -1156,7 +1164,8 @@ def verify_payment(request):
             f"VALUES ('{invoice_s}', '{uid_s}', '{current_timestamp}', "
             f"{total_amt}, {paid_amount}, {remaining_amount}, '{log_remark}', 'RAZ', '{payment_id_s}')"
         )
-        DB2Query.runQuery(insert_invoice_query)
+        success, msg = DB2Query.runQuery(insert_invoice_query)
+        print(success, msg, insert_invoice_query)
         
         return JsonResponse({
             "success": True,
@@ -2662,6 +2671,10 @@ def api_register_user(request):
                 password = candidate
                 break
             attempts += 1
+            
+        plain_pass = password
+        password = password + "XYZ_SALT"
+        password = hashlib.sha256(password.encode()).hexdigest()
 
         if not password:
             return JsonResponse({'error': 'Unable to generate unique password'}, status=500)
@@ -2692,6 +2705,8 @@ def api_register_user(request):
                         continue
                     if rx:
                         continue
+                    password_retry = password + "XYZ_SALT"
+                    password_retry = hashlib.sha256(password_retry.encode()).hexdigest()
                     insert_sql = (
                         "INSERT INTO AUTHENTICATION (UID, NAME, EMAIL, PASSWORD, FLAG, KEY) "
                         f"VALUES ('{cand}', '{name_s}', '{email_s}', '{password}', '{flag}', '{key}')"
@@ -2715,14 +2730,14 @@ def api_register_user(request):
         )
         DB2Query.runQuery(log_q)
 
-        pdf_url = f"/api/registration_pdf/{new_uid}/"
+        pdf_url = f"/api/registration_pdf/{new_uid}/{plain_pass}"
 
-        return JsonResponse({'success': True, 'uid': new_uid, 'password': password, 'pdf_url': pdf_url})
+        return JsonResponse({'success': True, 'uid': new_uid, 'password': plain_pass, 'pdf_url': pdf_url})
 
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
-def registration_pdf(request, uid):
+def registration_pdf(request, uid, temp_password):
     if not uid:
         return JsonResponse({'error': 'UID required'}, status=400)
 
@@ -2752,7 +2767,7 @@ def registration_pdf(request, uid):
     story.append(Spacer(1, 6))
     story.append(Paragraph(f"Email: {user.get('EMAIL', '')}", normal))
     story.append(Spacer(1, 6))
-    story.append(Paragraph(f"Temporary Password: {user.get('PASSWORD', '')}", normal))
+    story.append(Paragraph(f"Temporary Password: {temp_password}", normal))
     story.append(Spacer(1, 6))
     story.append(Paragraph(f"Flag: {user.get('FLAG', '')}", normal))
     story.append(Spacer(1, 12))
@@ -2975,6 +2990,9 @@ def api_reset_password(request):
         if datetime.now() > OTP_STORAGE[email]['expiry']:
             del OTP_STORAGE[email]
             return JsonResponse({'success': False, 'message': 'OTP has expired'}, status=400)
+        
+        new_password = new_password.replace("'", "''") + "XYZ_SALT"
+        new_password = hashlib.sha256(new_password.encode()).hexdigest()
         
         query = f"UPDATE AUTHENTICATION SET PASSWORD = '{new_password}' WHERE LOWER(EMAIL) = '{email}' AND FLAG = 'P'"
         success, result = DB2Query.runQuery(query)
